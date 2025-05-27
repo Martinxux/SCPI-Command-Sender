@@ -444,19 +444,19 @@ class SCPIGUI(QMainWindow):
         """加载默认预设"""
         self.presets = {
             "Basic Query": {
-                "description": "基本查询命令",
+                "description": "基本查询命令 -- basic query",
                 "commands": ["*IDN?", "*OPT?", "*STB?"],
                 "repeat": 1,
                 "interval": 0.5
             },
             "Clear and Run": {
-                "description": "清除并运行采集",
+                "description": "清除并运行采集 -- clean and run",
                 "commands": ["*CLS", ":ACQuire:CDISplay", ":ACQ:RUN"],
                 "repeat": 1,
                 "interval": 1.0
             },
             "Measurement Setup": {
-                "description": "测量设置",
+                "description": "测量设置 -- measurement setup",
                 "commands": [":MEASure:SOURce CH1", ":MEASure:VPP?", ":MEASure:VRMS?", ":MEASure:FREQuency?"],
                 "repeat": 3,
                 "interval": 0.8
