@@ -78,7 +78,7 @@ class SCPIInstrument:
 
 class SCPIWorker(QThread):
     """用于在后台执行SCPI命令的工作线程"""
-    command_sent = pyqtSignal(str, str)  # 信号：命令发送和响应
+    command_sent = pyqtSignal(str, str, int)  # 信号：命令发送、响应和循环次数
     finished = pyqtSignal()  # 信号：任务完成
     error_occurred = pyqtSignal(str)  # 信号：错误发生
 
@@ -93,10 +93,11 @@ class SCPIWorker(QThread):
         """线程执行的主方法"""
         try:
             for loop in range(self.repeat):
+                loop_num = loop + 1  # 循环次数从1开始计数
                 for cmd in self.commands:
                     try:
                         response = self.instrument.send_command(cmd)
-                        self.command_sent.emit(cmd, str(response) if response else "No response")
+                        self.command_sent.emit(cmd, str(response) if response else "No response", loop_num)
 
                         # 等待间隔(最后一次循环的最后一个命令后不等待)
                         if not (loop == self.repeat - 1 and cmd == self.commands[-1]):
@@ -116,6 +117,7 @@ class SCPIGUI(QMainWindow):
 
     def __init__(self):
         super().__init__()
+        self.instrument_info = None
         self.instrument = None
         self.worker = None
         self.presets = {}  # 存储预设配置
@@ -198,11 +200,10 @@ class SCPIGUI(QMainWindow):
         ip_label.setStyleSheet("padding-right: 2px;")  # 标签右内边距
         ip_layout.addWidget(ip_label)
         self.host_input = QLineEdit("127.0.0.1")
-        self.host_input.setFixedWidth(170)
         self.host_input.setStyleSheet("padding: 2px; margin-left: 0px;")  # 减少内边距
         ip_layout.addWidget(self.host_input)
         ip_layout.addSpacing(5)  # 与下一个控件间距
-        conn_layout.addLayout(ip_layout)
+        conn_layout.addLayout(ip_layout, stretch=1)  # 添加stretch因子使其能够伸缩
 
         # 端口输入
         port_layout = QHBoxLayout()
@@ -233,7 +234,6 @@ class SCPIGUI(QMainWindow):
         self.connect_btn.clicked.connect(self.toggle_connection)
         conn_layout.addWidget(self.connect_btn)
 
-        # 连接信息显示(已移除IP:Port显示)
         # 上位机信息显示
         self.instrument_info = QLabel("未获取")
         self.instrument_info.setStyleSheet("""
@@ -243,8 +243,8 @@ class SCPIGUI(QMainWindow):
                 background-color: #e3f2fd;
                 color: #0d47a1;
                 font: 9pt;
-                min-width: 200px;
-                max-width: 300px;
+                min-width: 400px;
+                max-width: 600px;
                 qproperty-alignment: AlignCenter;
             }
         """)
@@ -252,17 +252,17 @@ class SCPIGUI(QMainWindow):
         conn_layout.addWidget(self.instrument_info)
 
         # 连接状态
-        self.connection_status = QLabel("🔴 未连接")
-        self.connection_status.setStyleSheet("""
-            QLabel {
-                padding: 2px 8px;
-                border-radius: 3px;
-                background-color: #ffebee;
-                color: #c62828;
-                font-weight: bold;
-            }
-        """)
-        conn_layout.addWidget(self.connection_status)
+        # self.connection_status = QLabel("🔴 未连接")
+        # self.connection_status.setStyleSheet("""
+        #     QLabel {
+        #         padding: 2px 8px;
+        #         border-radius: 3px;
+        #         background-color: #ffebee;
+        #         color: #c62828;
+        #         font-weight: bold;
+        #     }
+        # """)
+        # conn_layout.addWidget(self.connection_status)
         conn_group.setLayout(conn_layout)
 
         # 命令设置区域
@@ -676,11 +676,20 @@ class SCPIGUI(QMainWindow):
         self.worker.error_occurred.connect(self.handle_execution_error)
         self.worker.start()
 
-    def handle_command_result(self, cmd, response):
+    def handle_command_result(self, cmd, response, loop_num):
         """处理单个命令的结果"""
-        self.append_output(f"> {cmd}")
-        if response != "None":
-            self.append_output(f"< {response}")
+        timestamp = logger.get_timestamp()
+        total_loops = self.repeat_input.value()
+        
+        # 如果只循环一次，不显示循环信息
+        if total_loops > 1:
+            self.append_output(f"{timestamp} [循环 {loop_num}/{total_loops}] > {cmd}")
+            if response != "None":
+                self.append_output(f"{timestamp} [循环 {loop_num}/{total_loops}] < {response}")
+        else:
+            self.append_output(f"{timestamp} > {cmd}")
+            if response != "None":
+                self.append_output(f"{timestamp} < {response}")
 
     def handle_execution_finished(self):
         """处理执行完成"""
@@ -712,10 +721,18 @@ class SCPIGUI(QMainWindow):
         self.worker = None
         QMessageBox.critical(self, "执行错误", error_msg)
 
-    def append_output(self, text):
-        """追加文本到输出区域"""
+    def append_output(self, text, level="INFO"):
+        """追加文本到输出区域并记录到日志"""
         self.output_area.append(text)
         self.output_area.ensureCursorVisible()
+        
+        # 记录到日志文件
+        if level == "ERROR":
+            logger.error(text)
+        elif level == "WARNING":
+            logger.warning(text)
+        else:
+            logger.info(text)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
