@@ -191,3 +191,5 @@ cython_debug/
 *.json
 
 /logs
+
+.idea
