@@ -1,6 +1,7 @@
 import socket
 import time
 from typing import List, Tuple, Optional
+from scpi_app.core.logger import logger
 
 
 class SCPIError(Exception):

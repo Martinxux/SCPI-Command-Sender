@@ -7,7 +7,7 @@ from PyQt5.QtCore import QThread, pyqtSignal, Qt
 import socket
 import time
 
-from logger import logger
+from scpi_app.core.logger import logger
 
 
 class SCPIError(Exception):

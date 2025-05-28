@@ -50,7 +50,7 @@ pip install -r requirements.txt
 
 ### 启动程序
 ```bash
-python scpi_gui.py
+python main.py
 ```
 
 ### 基本操作流程
