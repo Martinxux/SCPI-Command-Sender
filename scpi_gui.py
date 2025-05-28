@@ -2,8 +2,8 @@ import sys
 import json
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QTextEdit, QPushButton, QSpinBox, QDoubleSpinBox,
-                             QListWidget, QComboBox, QMessageBox, QFileDialog, QGroupBox, QInputDialog, QStatusBar)
-from PyQt5.QtCore import QThread, pyqtSignal
+                             QListWidget, QComboBox, QMessageBox, QFileDialog, QGroupBox, QInputDialog, QStatusBar, QDialog)
+from PyQt5.QtCore import QThread, pyqtSignal, Qt
 import socket
 import time
 
@@ -321,18 +321,45 @@ class SCPIGUI(QMainWindow):
         add_cmd_btn.setStyleSheet("background-color: #4CAF50;")
         add_cmd_btn.clicked.connect(self.add_command)
         
+        # 命令操作按钮布局
+        cmd_actions_layout = QHBoxLayout()
+        cmd_actions_layout.setSpacing(5)
+        
+        # 上移按钮
+        move_up_btn = QPushButton("⬆️ 上移")
+        move_up_btn.setStyleSheet("background-color: #2196F3;")
+        move_up_btn.clicked.connect(self.move_command_up)
+        cmd_actions_layout.addWidget(move_up_btn)
+        
+        # 下移按钮
+        move_down_btn = QPushButton("⬇️ 下移")
+        move_down_btn.setStyleSheet("background-color: #2196F3;")
+        move_down_btn.clicked.connect(self.move_command_down)
+        cmd_actions_layout.addWidget(move_down_btn)
+        
+        # 编辑按钮
+        edit_cmd_btn = QPushButton("✏️ 编辑")
+        edit_cmd_btn.setStyleSheet("background-color: #FF9800;")
+        edit_cmd_btn.clicked.connect(self.edit_command)
+        cmd_actions_layout.addWidget(edit_cmd_btn)
+        
         remove_cmd_btn = QPushButton("➖ 移除选中")
         remove_cmd_btn.setStyleSheet("background-color: #f44336;")
         remove_cmd_btn.clicked.connect(self.remove_command)
+        cmd_actions_layout.addWidget(remove_cmd_btn)
         
         clear_cmd_btn = QPushButton("🗑️ 清空列表")
         clear_cmd_btn.setStyleSheet("background-color: #607d8b;")
         clear_cmd_btn.clicked.connect(self.clear_commands)
+        cmd_actions_layout.addWidget(clear_cmd_btn)
 
         cmd_edit_layout.addWidget(self.new_cmd_input, stretch=1)
         cmd_edit_layout.addWidget(add_cmd_btn)
-        cmd_edit_layout.addWidget(remove_cmd_btn)
-        cmd_edit_layout.addWidget(clear_cmd_btn)
+        
+        # 创建新的垂直布局来包含命令输入和操作按钮
+        cmd_input_and_actions = QVBoxLayout()
+        cmd_input_and_actions.addLayout(cmd_edit_layout)
+        cmd_input_and_actions.addLayout(cmd_actions_layout)
 
         # 执行设置
         exec_layout = QHBoxLayout()
@@ -374,7 +401,7 @@ class SCPIGUI(QMainWindow):
 
         cmd_layout.addLayout(preset_layout)
         cmd_layout.addWidget(self.command_list)
-        cmd_layout.addLayout(cmd_edit_layout)
+        cmd_layout.addLayout(cmd_input_and_actions)
         cmd_layout.addLayout(exec_layout)
         cmd_group.setLayout(cmd_layout)
 
@@ -720,6 +747,42 @@ class SCPIGUI(QMainWindow):
         """)
         self.worker = None
         QMessageBox.critical(self, "执行错误", error_msg)
+
+    def move_command_up(self):
+        """将选中的命令向上移动一位"""
+        current_row = self.command_list.currentRow()
+        if current_row > 0:
+            current_item = self.command_list.takeItem(current_row)
+            self.command_list.insertItem(current_row - 1, current_item)
+            self.command_list.setCurrentRow(current_row - 1)
+            self.preset_combo.setCurrentIndex(0)  # 重置预设选择
+
+    def move_command_down(self):
+        """将选中的命令向下移动一位"""
+        current_row = self.command_list.currentRow()
+        if current_row < self.command_list.count() - 1 and current_row >= 0:
+            current_item = self.command_list.takeItem(current_row)
+            self.command_list.insertItem(current_row + 1, current_item)
+            self.command_list.setCurrentRow(current_row + 1)
+            self.preset_combo.setCurrentIndex(0)  # 重置预设选择
+
+    def edit_command(self):
+        """编辑选中的命令"""
+        current_item = self.command_list.currentItem()
+        if current_item is not None:
+            current_text = current_item.text()
+            # 创建一个输入对话框
+            dialog = QInputDialog(self)
+            dialog.setWindowTitle("编辑命令")
+            dialog.setLabelText("修改SCPI命令:")
+            dialog.setTextValue(current_text)
+            dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+            
+            if dialog.exec_() == QDialog.Accepted:
+                new_text = dialog.textValue().strip()
+                if new_text:
+                    current_item.setText(new_text)
+                    self.preset_combo.setCurrentIndex(0)  # 重置预设选择
 
     def append_output(self, text, level="INFO"):
         """追加文本到输出区域并记录到日志"""
