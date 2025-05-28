@@ -1,2 +1,2 @@
 # SCPI GUI功能包
-from .main import *
+from .scpi_gui import *
