@@ -2,7 +2,8 @@ import sys
 import json
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QTextEdit, QPushButton, QSpinBox, QDoubleSpinBox,
-                             QListWidget, QComboBox, QMessageBox, QFileDialog, QGroupBox, QInputDialog, QStatusBar, QDialog)
+                             QListWidget, QComboBox, QMessageBox, QFileDialog, QGroupBox, QInputDialog, 
+                             QStatusBar, QDialog, QProgressBar)
 from PyQt5.QtCore import QThread, pyqtSignal, Qt
 import socket
 import time
@@ -79,6 +80,7 @@ class SCPIInstrument:
 class SCPIWorker(QThread):
     """用于在后台执行SCPI命令的工作线程"""
     command_sent = pyqtSignal(str, str, int)  # 信号：命令发送、响应和循环次数
+    progress_updated = pyqtSignal(int, int)  # 信号：当前进度和总命令数
     finished = pyqtSignal()  # 信号：任务完成
     error_occurred = pyqtSignal(str)  # 信号：错误发生
 
@@ -88,16 +90,30 @@ class SCPIWorker(QThread):
         self.commands = commands
         self.repeat = repeat
         self.interval = interval
+        self._is_running = True
+
+    def stop(self):
+        """请求停止执行"""
+        self._is_running = False
 
     def run(self):
         """线程执行的主方法"""
         try:
+            total_commands = len(self.commands) * self.repeat
+            commands_executed = 0
+            
             for loop in range(self.repeat):
                 loop_num = loop + 1  # 循环次数从1开始计数
                 for cmd in self.commands:
+                    if not self._is_running:
+                        self.finished.emit()
+                        return
+                        
                     try:
                         response = self.instrument.send_command(cmd)
                         self.command_sent.emit(cmd, str(response) if response else "No response", loop_num)
+                        commands_executed += 1
+                        self.progress_updated.emit(commands_executed, total_commands)
 
                         # 等待间隔(最后一次循环的最后一个命令后不等待)
                         if not (loop == self.repeat - 1 and cmd == self.commands[-1]):
@@ -124,7 +140,7 @@ class SCPIGUI(QMainWindow):
         self.current_preset = None
         self.init_ui()
         self.setWindowTitle("SCPI Command Sender")
-        self.resize(900, 700)
+        self.resize(950, 970)
         self.load_default_presets()
 
     def init_ui(self):
@@ -201,6 +217,9 @@ class SCPIGUI(QMainWindow):
         ip_layout.addWidget(ip_label)
         self.host_input = QLineEdit("127.0.0.1")
         self.host_input.setStyleSheet("padding: 2px; margin-left: 0px;")  # 减少内边距
+        self.host_input.setToolTip("请输入有效的IPv4地址 (例如: 192.168.1.1)")
+        self.host_input.textChanged.connect(self.validate_ip_input)
+        self.host_input.editingFinished.connect(self.format_ip_input)
         ip_layout.addWidget(self.host_input)
         ip_layout.addSpacing(5)  # 与下一个控件间距
         conn_layout.addLayout(ip_layout, stretch=1)  # 添加stretch因子使其能够伸缩
@@ -250,19 +269,8 @@ class SCPIGUI(QMainWindow):
         """)
         self.instrument_info.setToolTip("仪器标识信息")
         conn_layout.addWidget(self.instrument_info)
-
-        # 连接状态
-        # self.connection_status = QLabel("🔴 未连接")
-        # self.connection_status.setStyleSheet("""
-        #     QLabel {
-        #         padding: 2px 8px;
-        #         border-radius: 3px;
-        #         background-color: #ffebee;
-        #         color: #c62828;
-        #         font-weight: bold;
-        #     }
-        # """)
-        # conn_layout.addWidget(self.connection_status)
+        conn_layout.addStretch()  # 添加伸缩因子使布局更灵活
+        # 将连接设置区域添加到主布局
         conn_group.setLayout(conn_layout)
 
         # 命令设置区域
@@ -381,6 +389,10 @@ class SCPIGUI(QMainWindow):
 
         exec_layout.addStretch()
 
+        # 执行按钮和进度条布局
+        exec_btn_layout = QHBoxLayout()
+        exec_btn_layout.setSpacing(8)
+        
         self.execute_btn = QPushButton("🚀 执行命令")
         self.execute_btn.setStyleSheet("""
             QPushButton {
@@ -397,7 +409,45 @@ class SCPIGUI(QMainWindow):
         """)
         self.execute_btn.clicked.connect(self.execute_commands)
         self.execute_btn.setEnabled(False)
-        exec_layout.addWidget(self.execute_btn)
+        exec_btn_layout.addWidget(self.execute_btn)
+        
+        self.stop_btn = QPushButton("🛑 停止")
+        self.stop_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f44336;
+                font-weight: bold;
+                padding: 8px 16px;
+            }
+            QPushButton:hover {
+                background-color: #d32f2f;
+            }
+            QPushButton:disabled {
+                background-color: #BDBDBD;
+            }
+        """)
+        self.stop_btn.clicked.connect(self.stop_execution)
+        self.stop_btn.setEnabled(False)
+        exec_btn_layout.addWidget(self.stop_btn)
+        
+        # 进度条
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                border: 1px solid #ccc;
+                border-radius: 3px;
+                text-align: center;
+                height: 20px;
+            }
+            QProgressBar::chunk {
+                background-color: #4CAF50;
+                width: 10px;
+            }
+        """)
+        exec_btn_layout.addWidget(self.progress_bar, stretch=1)
+        
+        exec_layout.addLayout(exec_btn_layout)
 
         cmd_layout.addLayout(preset_layout)
         cmd_layout.addWidget(self.command_list)
@@ -468,28 +518,21 @@ class SCPIGUI(QMainWindow):
         self.setCentralWidget(main_widget)
 
     def load_default_presets(self):
-        """加载默认预设"""
-        self.presets = {
-            "Basic Query": {
-                "description": "基本查询命令 -- basic query",
-                "commands": ["*IDN?", "*OPT?", "*STB?"],
-                "repeat": 1,
-                "interval": 0.5
-            },
-            "Clear and Run": {
-                "description": "清除并运行采集 -- clean and run",
-                "commands": ["*CLS", ":ACQuire:CDISplay", ":ACQ:RUN"],
-                "repeat": 1,
-                "interval": 1.0
-            },
-            "Measurement Setup": {
-                "description": "测量设置 -- measurement setup",
-                "commands": [":MEASure:SOURce CH1", ":MEASure:VPP?", ":MEASure:VRMS?", ":MEASure:FREQuency?"],
-                "repeat": 3,
-                "interval": 0.8
-            }
-        }
-        self.update_preset_combo()
+        """从配置文件加载预设"""
+        try:
+            with open("config/presets.json", "r", encoding='utf-8') as f:
+                config = json.load(f)
+                self.presets = config.get("presets", {})
+                
+            if not self.presets:
+                raise ValueError("No presets found in config file")
+                
+            self.update_preset_combo()
+            self.append_output("预设配置已从文件加载")
+        except Exception as e:
+            QMessageBox.warning(self, "警告", f"加载预设配置失败: {str(e)}")
+            self.presets = {}
+            self.update_preset_combo()
 
     def update_preset_combo(self):
         """更新预设下拉框"""
@@ -523,7 +566,7 @@ class SCPIGUI(QMainWindow):
 
         if file_name:
             try:
-                with open(file_name, 'r') as f:
+                with open(file_name, 'r', encoding='utf-8') as f:
                     preset_data = json.load(f)
 
                 if not isinstance(preset_data, dict):
@@ -596,6 +639,83 @@ class SCPIGUI(QMainWindow):
         """检查是否真正连接到上位机"""
         return self.instrument and hasattr(self.instrument, 'sock') and self.instrument.sock
 
+    def is_valid_ip(self, ip_str):
+        """验证IP地址格式是否为xxx.xxx.xxx.xxx"""
+        parts = ip_str.split('.')
+        if len(parts) != 4:
+            return False
+        for part in parts:
+            if not part.isdigit():
+                return False
+            num = int(part)
+            if num < 0 or num > 255:
+                return False
+        return True
+
+    def is_valid_ip(self, ip_str):
+        """验证IP地址格式是否为xxx.xxx.xxx.xxx"""
+        parts = ip_str.split('.')
+        if len(parts) != 4:
+            return False
+        for part in parts:
+            if not part.isdigit():
+                return False
+            num = int(part)
+            if num < 0 or num > 255:
+                return False
+        return True
+
+    def validate_ip_input(self, text):
+        """实时验证IP地址输入"""
+        # 允许中间输入过程的不完整格式
+        if not text or text.count('.') > 3:
+            self.host_input.setStyleSheet("background-color: #FFD6D6; padding: 2px; margin-left: 0px;")
+            return
+            
+        parts = text.split('.')
+        valid = True
+        for part in parts:
+            if not part.isdigit() or (part and int(part) > 255):
+                valid = False
+                break
+                
+        if valid:
+            self.host_input.setStyleSheet("padding: 2px; margin-left: 0px;")
+        else:
+            self.host_input.setStyleSheet("background-color: #FFD6D6; padding: 2px; margin-left: 0px;")
+
+    def format_ip_input(self):
+        """自动格式化IP地址输入"""
+        text = self.host_input.text()
+        parts = []
+        current = ''
+        
+        # 提取数字部分
+        for char in text:
+            if char.isdigit():
+                current += char
+            elif char == '.' and current:
+                parts.append(current)
+                current = ''
+        if current:
+            parts.append(current)
+            
+        # 限制最多4部分，每部分最多3位
+        parts = parts[:4]
+        formatted = []
+        for part in parts:
+            if part:
+                formatted.append(part[:3])
+            else:
+                formatted.append('0')
+                
+        # 补全为4部分
+        while len(formatted) < 4:
+            formatted.append('0')
+            
+        # 组合为标准IP格式
+        self.host_input.setText('.'.join(formatted[:4]))
+
     def toggle_connection(self):
         """连接/断开上位机"""
         if self.is_connected():
@@ -617,8 +737,13 @@ class SCPIGUI(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "错误", f"断开连接错误: {str(e)}")
         else:
+            host = self.host_input.text()
+            if not self.is_valid_ip(host):
+                QMessageBox.warning(self, "IP地址错误", 
+                                  "请输入有效的IPv4地址 (格式: xxx.xxx.xxx.xxx)")
+                return
+                
             try:
-                host = self.host_input.text()
                 port = self.port_input.value()
                 self.instrument = SCPIInstrument(host, port)
                 self.instrument.connect()
@@ -685,7 +810,12 @@ class SCPIGUI(QMainWindow):
         repeat = self.repeat_input.value()
         interval = self.interval_input.value()
 
+        # 重置进度条
+        self.progress_bar.setValue(0)
+        
+        # 更新UI状态
         self.execute_btn.setEnabled(False)
+        self.stop_btn.setEnabled(True)
         self.connect_btn.setEnabled(False)
         self.execution_status.setText("🟠 执行中")
         self.execution_status.setStyleSheet("""
@@ -699,6 +829,7 @@ class SCPIGUI(QMainWindow):
         # 创建工作线程
         self.worker = SCPIWorker(self.instrument, commands, repeat, interval)
         self.worker.command_sent.connect(self.handle_command_result)
+        self.worker.progress_updated.connect(self.update_progress)
         self.worker.finished.connect(self.handle_execution_finished)
         self.worker.error_occurred.connect(self.handle_execution_error)
         self.worker.start()
@@ -718,18 +849,34 @@ class SCPIGUI(QMainWindow):
             if response != "None":
                 self.append_output(f"{timestamp} < {response}")
 
+    def update_progress(self, current, total):
+        """更新进度条显示"""
+        if total > 0:
+            percent = int((current / total) * 100)
+            self.progress_bar.setValue(percent)
+            self.progress_bar.setFormat(f"{current}/{total} ({percent}%)")
+
+    def stop_execution(self):
+        """停止当前执行"""
+        if self.worker:
+            self.worker.stop()
+            self.append_output("正在停止执行...")
+            self.stop_btn.setEnabled(False)
+
     def handle_execution_finished(self):
         """处理执行完成"""
         self.append_output("命令执行完成")
         self.execute_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
         self.connect_btn.setEnabled(True)
-        self.execution_status.setText("🟢 空闲")
+        self.execution_status.setText("� 空闲")
         self.execution_status.setStyleSheet("""
             QLabel {
                 background-color: #e8f5e9;
                 color: #2e7d32;
             }
         """)
+        self.progress_bar.setValue(100)
         self.worker = None
 
     def handle_execution_error(self, error_msg):
@@ -737,6 +884,7 @@ class SCPIGUI(QMainWindow):
         logger.error(f"执行错误: {error_msg}")
         self.append_output(f"错误: {error_msg}", "ERROR")
         self.execute_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
         self.connect_btn.setEnabled(True)
         self.execution_status.setText("🔴 错误")
         self.execution_status.setStyleSheet("""
@@ -745,6 +893,7 @@ class SCPIGUI(QMainWindow):
                 color: #c62828;
             }
         """)
+        self.progress_bar.setValue(0)
         self.worker = None
         QMessageBox.critical(self, "执行错误", error_msg)
 
