@@ -95,6 +95,5 @@ venv.bak/
 *.swp
 *.swo
 
-*.json
 logs
 output
