@@ -935,16 +935,26 @@ class SCPIGUI(QMainWindow):
 
     def append_output(self, text, level="INFO"):
         """追加文本到输出区域并记录到日志"""
+        # 添加到输出区域
         self.output_area.append(text)
         self.output_area.ensureCursorVisible()
         
+        # 检测并去除时间戳
+        if text.startswith("[") and "]" in text:
+            # 找到第一个"]"的位置
+            timestamp_end = text.find("]") + 1
+            # 提取消息内容（不包含时间戳）
+            message = text[timestamp_end:].strip()
+        else:
+            message = text
+            
         # 记录到日志文件
         if level == "ERROR":
-            logger.error(text)
+            logger.error(message)
         elif level == "WARNING":
-            logger.warning(text)
+            logger.warning(message)
         else:
-            logger.info(text)
+            logger.info(message)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
