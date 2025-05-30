@@ -530,6 +530,7 @@ class SCPIGUI(QMainWindow):
             self.update_preset_combo()
             self.append_output("预设配置已从文件加载")
         except Exception as e:
+            logger.error(f"加载预设配置失败: {str(e)}")
             QMessageBox.warning(self, "警告", f"加载预设配置失败: {str(e)}")
             self.presets = {}
             self.update_preset_combo()
