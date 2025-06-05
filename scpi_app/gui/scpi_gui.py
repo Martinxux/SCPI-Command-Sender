@@ -364,6 +364,12 @@ class SCPIGUI(QMainWindow):
         cmd_edit_layout.addWidget(self.new_cmd_input, stretch=1)
         cmd_edit_layout.addWidget(add_cmd_btn)
         
+        # 添加直接发送按钮
+        self.send_now_btn = QPushButton("⚡ 直接发送")
+        self.send_now_btn.setStyleSheet("background-color: #2196F3;")
+        self.send_now_btn.clicked.connect(self.send_single_command)
+        cmd_edit_layout.addWidget(self.send_now_btn)
+        
         # 创建新的垂直布局来包含命令输入和操作按钮
         cmd_input_and_actions = QVBoxLayout()
         cmd_input_and_actions.addLayout(cmd_edit_layout)
@@ -393,7 +399,7 @@ class SCPIGUI(QMainWindow):
         exec_btn_layout = QHBoxLayout()
         exec_btn_layout.setSpacing(8)
         
-        self.execute_btn = QPushButton("🚀 执行命令")
+        self.execute_btn = QPushButton("🚀 循环执行预设命令")
         self.execute_btn.setStyleSheet("""
             QPushButton {
                 background-color: #9C27B0;
@@ -556,8 +562,16 @@ class SCPIGUI(QMainWindow):
         self.repeat_input.setValue(preset["repeat"])
         self.interval_input.setValue(preset["interval"])
 
-        self.append_output(f"已加载预设: {preset_name}")
-        self.append_output(f"描述: {preset['description']}")
+        # 输出预设详细信息
+        timestamp = logger.get_timestamp()
+        self.append_output(f"{timestamp} 加载预设: {preset_name}")
+        self.append_output(f"{timestamp} 描述: {preset['description']}")
+        self.append_output(f"{timestamp} 命令数量: {len(preset['commands'])}")
+        self.append_output(f"{timestamp} 重复次数: {preset['repeat']}")
+        self.append_output(f"{timestamp} 间隔时间: {preset['interval']}秒")
+        # self.append_output(f"{timestamp} 预设内容:")
+        # for i, cmd in enumerate(preset["commands"], 1):
+        #     self.append_output(f"{timestamp}   {i}. {cmd}")
 
     def load_preset_from_file(self):
         """从文件加载预设"""
@@ -625,6 +639,28 @@ class SCPIGUI(QMainWindow):
             self.command_list.addItem(cmd)
             self.new_cmd_input.clear()
             self.preset_combo.setCurrentIndex(0)  # 重置预设选择
+
+    def send_single_command(self):
+        """直接发送单个命令而不添加到列表"""
+        if not self.is_connected():
+            QMessageBox.warning(self, "警告", "请先连接到设备")
+            return
+        
+        cmd = self.new_cmd_input.text().strip()
+        if not cmd:
+            QMessageBox.warning(self, "警告", "请输入要发送的命令")
+            return
+        
+        try:
+            response = self.instrument.send_command(cmd)
+            timestamp = logger.get_timestamp()
+            self.append_output(f"{timestamp} > {cmd}")
+            if response:
+                self.append_output(f"{timestamp} < {response}")
+            else:
+                self.append_output(f"{timestamp} < 无响应")
+        except SCPIError as e:
+            self.append_output(f"发送命令失败: {str(e)}", "ERROR")
 
     def remove_command(self):
         """移除选中的命令"""
@@ -753,16 +789,21 @@ class SCPIGUI(QMainWindow):
                 try:
                     idn = self.instrument.send_command("*IDN?")
                     if idn:
-                        # 提取简化的仪器标识
-                        parts = idn.split(',')
-                        short_id = f"{parts[0].strip()} {parts[1].strip()}"
+                        parts = [p.strip() for p in idn.split(',')]
+                        # 确保至少有3个部分，不足的用空字符串填充
+                        while len(parts) < 3:
+                            parts.append('')
+                        # 显示制造商、型号和序列号
+                        short_id = f"{parts[0]} {parts[1]} (SN:{parts[2]})" if parts[2] else f"{parts[0]} {parts[1]}"
                         self.instrument_info.setText(short_id)
                         self.instrument_info.setToolTip(idn)
                     else:
                         self.instrument_info.setText("无响应")
+                        self.append_output("仪器未返回标识信息", "WARNING")
                 except Exception as e:
                     self.instrument_info.setText("获取失败")
-                    self.append_output(f"获取仪器信息错误: {str(e)}")
+                    self.append_output(f"获取仪器信息错误: {str(e)}", "ERROR")
+                    logger.error(f"获取仪器信息失败: {str(e)}")
                 
                 self.connection_status.setText("🟢 已连接")
                 self.connection_status.setStyleSheet("""
