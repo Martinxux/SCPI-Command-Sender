@@ -142,7 +142,7 @@ class SCPIGUI(QMainWindow):
         self.current_preset = None
         
         # 设置窗口图标
-        icon_path = os.path.join(os.path.dirname(__file__), "resources", "logo.ico")
+        icon_path = "./ico/logo.ico"
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
         else:
