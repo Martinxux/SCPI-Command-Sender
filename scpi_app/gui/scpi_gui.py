@@ -1,10 +1,12 @@
 import sys
 import json
+import os
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QTextEdit, QPushButton, QSpinBox, QDoubleSpinBox,
                              QListWidget, QComboBox, QMessageBox, QFileDialog, QGroupBox, QInputDialog, 
-                             QStatusBar, QDialog, QProgressBar)
+                             QStatusBar, QDialog, QProgressBar, QMenu)
 from PyQt5.QtCore import QThread, pyqtSignal, Qt
+from PyQt5.QtGui import QIcon
 import socket
 import time
 
@@ -138,6 +140,14 @@ class SCPIGUI(QMainWindow):
         self.worker = None
         self.presets = {}  # 存储预设配置
         self.current_preset = None
+        
+        # 设置窗口图标
+        icon_path = os.path.join(os.path.dirname(__file__), "resources", "logo.ico")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+        else:
+            logger.warning(f"图标文件未找到: {icon_path}")
+            
         self.init_ui()
         self.setWindowTitle("SCPI Command Sender")
         self.resize(950, 970)
@@ -145,51 +155,67 @@ class SCPIGUI(QMainWindow):
 
     def init_ui(self):
         """初始化用户界面"""
+        # 定义样式常量
+        self.STYLES = {
+            "button": """
+                QPushButton {
+                    background-color: #4CAF50;
+                    color: white;
+                    border: none;
+                    padding: 5px 10px;
+                    border-radius: 3px;
+                    min-width: 60px;
+                }
+                QPushButton:hover {
+                    background-color: #45a049;
+                }
+                QPushButton:pressed {
+                    background-color: #3d8b40;
+                }
+                QPushButton:disabled {
+                    background-color: #cccccc;
+                }
+            """,
+            "input": """
+                QLineEdit, QTextEdit, QListWidget, QComboBox, QSpinBox, QDoubleSpinBox {
+                    border: 1px solid #ccc;
+                    border-radius: 3px;
+                    padding: 3px;
+                }
+            """,
+            "groupbox": """
+                QGroupBox {
+                    border: 1px solid #ccc;
+                    border-radius: 5px;
+                    margin-top: 10px;
+                    padding-top: 15px;
+                }
+                QGroupBox::title {
+                    subcontrol-origin: margin;
+                    left: 10px;
+                    padding: 0 3px;
+                }
+            """,
+            "textedit": """
+                QTextEdit {
+                    font-family: 'Consolas', 'Courier New', monospace;
+                }
+            """
+        }
+
         # 设置全局样式
-        self.setStyleSheet("""
-            QWidget {
+        self.setStyleSheet(f"""
+            QWidget {{
                 font-family: 'Segoe UI', Arial, sans-serif;
                 font-size: 10pt;
-            }
-            QGroupBox {
-                border: 1px solid #ccc;
-                border-radius: 5px;
-                margin-top: 10px;
-                padding-top: 15px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 3px;
-            }
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                padding: 5px 10px;
-                border-radius: 3px;
-                min-width: 60px;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-            QPushButton:pressed {
-                background-color: #3d8b40;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-            }
-            QLineEdit, QTextEdit, QListWidget, QComboBox, QSpinBox, QDoubleSpinBox {
-                border: 1px solid #ccc;
-                border-radius: 3px;
-                padding: 3px;
-            }
-            QTextEdit {
-                font-family: 'Consolas', 'Courier New', monospace;
-            }
-            # 连接状态指示器
-            .connected { color: #4CAF50; }
-            .disconnected { color: #f44336; }
+            }}
+            {self.STYLES["button"]}
+            {self.STYLES["input"]}
+            {self.STYLES["groupbox"]}
+            {self.STYLES["textedit"]}
+            /* 连接状态指示器 */
+            .connected {{ color: #4CAF50; }}
+            .disconnected {{ color: #f44336; }}
         """)
 
         main_widget = QWidget()
@@ -216,13 +242,14 @@ class SCPIGUI(QMainWindow):
         ip_label.setStyleSheet("padding-right: 2px;")  # 标签右内边距
         ip_layout.addWidget(ip_label)
         self.host_input = QLineEdit("127.0.0.1")
+        self.host_input.setFixedWidth(100)  # 设置固定宽度
         self.host_input.setStyleSheet("padding: 2px; margin-left: 0px;")  # 减少内边距
         self.host_input.setToolTip("请输入有效的IPv4地址 (例如: 192.168.1.1)")
         self.host_input.textChanged.connect(self.validate_ip_input)
         self.host_input.editingFinished.connect(self.format_ip_input)
         ip_layout.addWidget(self.host_input)
         ip_layout.addSpacing(5)  # 与下一个控件间距
-        conn_layout.addLayout(ip_layout, stretch=1)  # 添加stretch因子使其能够伸缩
+        conn_layout.addLayout(ip_layout)  # 移除stretch因子
 
         # 端口输入
         port_layout = QHBoxLayout()
@@ -262,14 +289,12 @@ class SCPIGUI(QMainWindow):
                 background-color: #e3f2fd;
                 color: #0d47a1;
                 font: 9pt;
-                min-width: 400px;
-                max-width: 600px;
+                min-width: 200px;
                 qproperty-alignment: AlignCenter;
             }
         """)
         self.instrument_info.setToolTip("仪器标识信息")
-        conn_layout.addWidget(self.instrument_info)
-        conn_layout.addStretch()  # 添加伸缩因子使布局更灵活
+        conn_layout.addWidget(self.instrument_info, stretch=1)  # 设置stretch因子使其可以缩放
         # 将连接设置区域添加到主布局
         conn_group.setLayout(conn_layout)
 
@@ -288,17 +313,38 @@ class SCPIGUI(QMainWindow):
         self.preset_combo.currentTextChanged.connect(self.load_preset)
         preset_layout.addWidget(self.preset_combo, stretch=1)
 
-        self.load_preset_btn = QPushButton("加载预设...")
-        self.load_preset_btn.setStyleSheet("background-color: #2196F3;")
-        self.load_preset_btn.clicked.connect(self.load_preset_from_file)
+        # 保存和删除按钮容器
+        btn_container = QWidget()
+        btn_layout = QHBoxLayout()
+        btn_layout.setContentsMargins(0, 0, 0, 0)
+        btn_layout.setSpacing(5)
         
-        self.save_preset_btn = QPushButton("保存预设...")
-        self.save_preset_btn.setStyleSheet("background-color: #FF9800;")
+        self.save_preset_btn = QPushButton("💾 保存预设")
+        self.save_preset_btn.setToolTip("保存当前配置为预设")
+        self.save_preset_btn.setStyleSheet("""
+            background-color: #2196F3;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            min-width: 60px;
+        """)
         self.save_preset_btn.clicked.connect(self.save_preset_to_file)
-
-        preset_layout.addWidget(self.load_preset_btn)
-        preset_layout.addWidget(self.save_preset_btn)
-        preset_layout.addStretch()
+        btn_layout.addWidget(self.save_preset_btn)
+        
+        self.del_preset_btn = QPushButton("🗑️ 删除预设")
+        self.del_preset_btn.setToolTip("删除当前选中预设")
+        self.del_preset_btn.setStyleSheet("""
+            background-color: #F44336;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            min-width: 60px;
+        """)
+        self.del_preset_btn.clicked.connect(self.del_preset)
+        btn_layout.addWidget(self.del_preset_btn)
+        
+        btn_container.setLayout(btn_layout)
+        preset_layout.addWidget(btn_container)
 
         # 命令列表
         self.command_list = QListWidget()
@@ -317,6 +363,10 @@ class SCPIGUI(QMainWindow):
                 color: black;
             }
         """)
+        self.command_list.setDragDropMode(QListWidget.InternalMove)  # 启用拖拽排序
+        self.command_list.itemDoubleClicked.connect(self.edit_command)  # 双击编辑
+        self.command_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.command_list.customContextMenuRequested.connect(self.show_command_context_menu)
 
         # 命令编辑
         cmd_edit_layout = QHBoxLayout()
@@ -325,44 +375,13 @@ class SCPIGUI(QMainWindow):
         self.new_cmd_input.setPlaceholderText("输入SCPI命令...")
         self.new_cmd_input.setStyleSheet("QLineEdit { padding: 5px; }")
         
-        add_cmd_btn = QPushButton("➕ 添加")
-        add_cmd_btn.setStyleSheet("background-color: #4CAF50;")
-        add_cmd_btn.clicked.connect(self.add_command)
+        self.add_cmd_btn = QPushButton("➕ 添加")
+        self.add_cmd_btn.setToolTip("添加当前指令到列表")
+        self.add_cmd_btn.setStyleSheet("background-color: #4CAF50;")
+        self.add_cmd_btn.clicked.connect(self.add_command)
         
-        # 命令操作按钮布局
-        cmd_actions_layout = QHBoxLayout()
-        cmd_actions_layout.setSpacing(5)
-        
-        # 上移按钮
-        move_up_btn = QPushButton("⬆️ 上移")
-        move_up_btn.setStyleSheet("background-color: #2196F3;")
-        move_up_btn.clicked.connect(self.move_command_up)
-        cmd_actions_layout.addWidget(move_up_btn)
-        
-        # 下移按钮
-        move_down_btn = QPushButton("⬇️ 下移")
-        move_down_btn.setStyleSheet("background-color: #2196F3;")
-        move_down_btn.clicked.connect(self.move_command_down)
-        cmd_actions_layout.addWidget(move_down_btn)
-        
-        # 编辑按钮
-        edit_cmd_btn = QPushButton("✏️ 编辑")
-        edit_cmd_btn.setStyleSheet("background-color: #FF9800;")
-        edit_cmd_btn.clicked.connect(self.edit_command)
-        cmd_actions_layout.addWidget(edit_cmd_btn)
-        
-        remove_cmd_btn = QPushButton("➖ 移除选中")
-        remove_cmd_btn.setStyleSheet("background-color: #f44336;")
-        remove_cmd_btn.clicked.connect(self.remove_command)
-        cmd_actions_layout.addWidget(remove_cmd_btn)
-        
-        clear_cmd_btn = QPushButton("🗑️ 清空列表")
-        clear_cmd_btn.setStyleSheet("background-color: #607d8b;")
-        clear_cmd_btn.clicked.connect(self.clear_commands)
-        cmd_actions_layout.addWidget(clear_cmd_btn)
-
         cmd_edit_layout.addWidget(self.new_cmd_input, stretch=1)
-        cmd_edit_layout.addWidget(add_cmd_btn)
+        cmd_edit_layout.addWidget(self.add_cmd_btn)
         
         # 添加直接发送按钮
         self.send_now_btn = QPushButton("⚡ 直接发送")
@@ -370,10 +389,9 @@ class SCPIGUI(QMainWindow):
         self.send_now_btn.clicked.connect(self.send_single_command)
         cmd_edit_layout.addWidget(self.send_now_btn)
         
-        # 创建新的垂直布局来包含命令输入和操作按钮
+        # 创建新的垂直布局来包含命令输入
         cmd_input_and_actions = QVBoxLayout()
         cmd_input_and_actions.addLayout(cmd_edit_layout)
-        cmd_input_and_actions.addLayout(cmd_actions_layout)
 
         # 执行设置
         exec_layout = QHBoxLayout()
@@ -550,7 +568,14 @@ class SCPIGUI(QMainWindow):
 
     def load_preset(self, preset_name):
         """加载选中的预设"""
-        if preset_name == "-- 选择预设 --" or preset_name not in self.presets:
+        if preset_name == "-- 选择预设 --":
+            self.current_preset = None
+            self.command_list.clear()
+            self.repeat_input.setValue(1)
+            self.interval_input.setValue(1.0)
+            return
+            
+        if preset_name not in self.presets:
             return
 
         preset = self.presets[preset_name]
@@ -602,43 +627,100 @@ class SCPIGUI(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "错误", f"加载预设失败: {str(e)}")
 
+    def del_preset(self):
+        """删除当前选中的预设"""
+        if not hasattr(self, 'current_preset') or not self.current_preset:
+            QMessageBox.warning(self, "警告", "请先选择一个预设")
+            return
+            
+        reply = QMessageBox.question(
+            self,
+            '确认删除',
+            f'确定要删除预设 "{self.current_preset}" 吗？',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                with open("config/presets.json", "r", encoding='utf-8') as f:
+                    presets = json.load(f)
+                
+                if self.current_preset in presets["presets"]:
+                    del presets["presets"][self.current_preset]
+                    
+                    with open("config/presets.json", "w", encoding='utf-8') as f:
+                        json.dump(presets, f, indent=4, ensure_ascii=False)
+                    
+                    self.presets = presets["presets"]
+                    self.preset_combo.clear()
+                    self.preset_combo.addItem("-- 选择预设 --")
+                    for preset_name in sorted(self.presets.keys()):
+                        self.preset_combo.addItem(preset_name)
+                    self.current_preset = None
+                    self.command_list.clear()
+                    QMessageBox.information(self, "成功", "预设已删除")
+                else:
+                    QMessageBox.warning(self, "警告", f"预设 '{self.current_preset}' 不存在")
+                    
+            except Exception as e:
+                QMessageBox.critical(self, "错误", f"删除预设失败: {str(e)}")
+                logger.error(f"删除预设失败: {str(e)}")
+
     def save_preset_to_file(self):
-        """保存当前命令序列为预设文件"""
+        """保存当前命令序列到presets.json"""
         if self.command_list.count() == 0:
             QMessageBox.warning(self, "警告", "没有可保存的命令序列")
             return
 
+        # 获取预设名称和描述
         preset_name, ok = QInputDialog.getText(
             self, "保存预设", "输入预设名称:", QLineEdit.Normal, "")
+        if not ok or not preset_name:
+            return
+            
+        preset_desc, ok = QInputDialog.getText(
+            self, "保存预设", "输入预设描述:", QLineEdit.Normal, "")
+        if not ok:
+            return
 
-        if ok and preset_name:
-            preset_data = {
-                "name": preset_name,
-                "description": f"自定义预设 - {preset_name}",
+        try:
+            # 读取现有预设
+            with open("config/presets.json", "r", encoding='utf-8') as f:
+                presets_data = json.load(f)
+                
+            # 添加或更新预设
+            presets_data["presets"][preset_name] = {
+                "description": preset_desc,
                 "commands": [self.command_list.item(i).text() for i in range(self.command_list.count())],
                 "repeat": self.repeat_input.value(),
                 "interval": self.interval_input.value()
             }
-
-            options = QFileDialog.Options()
-            file_name, _ = QFileDialog.getSaveFileName(
-                self, "保存预设", f"{preset_name}.json", "JSON Files (*.json);;All Files (*)", options=options)
-
-            if file_name:
-                try:
-                    with open(file_name, 'w') as f:
-                        json.dump(preset_data, f, indent=4)
-                    self.append_output(f"预设已保存到: {file_name}")
-                except Exception as e:
-                    QMessageBox.critical(self, "错误", f"保存预设失败: {str(e)}")
+            
+            # 写回文件
+            with open("config/presets.json", "w", encoding='utf-8') as f:
+                json.dump(presets_data, f, indent=4, ensure_ascii=False)
+                
+            # 更新内存中的预设数据
+            self.presets = presets_data["presets"]
+            self.update_preset_combo()
+            self.preset_combo.setCurrentText(preset_name)
+            
+            self.append_output(f"预设 '{preset_name}' 已保存到presets.json")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"保存预设失败: {str(e)}")
+            logger.error(f"保存预设失败: {str(e)}")
 
     def add_command(self):
         """添加新命令到列表"""
         cmd = self.new_cmd_input.text().strip()
-        if cmd:
-            self.command_list.addItem(cmd)
-            self.new_cmd_input.clear()
-            self.preset_combo.setCurrentIndex(0)  # 重置预设选择
+        if not cmd:
+            QMessageBox.warning(self, "警告", "命令不能为空")
+            return
+            
+        self.command_list.addItem(cmd)
+        self.new_cmd_input.clear()
 
     def send_single_command(self):
         """直接发送单个命令而不添加到列表"""
@@ -668,26 +750,22 @@ class SCPIGUI(QMainWindow):
             self.command_list.takeItem(self.command_list.row(item))
 
     def clear_commands(self):
-        """清空命令列表"""
-        self.command_list.clear()
-        self.preset_combo.setCurrentIndex(0)  # 重置预设选择
+        """清空命令列表(带确认对话框)"""
+        reply = QMessageBox.question(
+            self,
+            '确认清空',
+            '确定要清空所有命令吗？',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            self.command_list.clear()
+            self.preset_combo.setCurrentIndex(0)  # 重置预设选择
 
     def is_connected(self):
         """检查是否真正连接到上位机"""
         return self.instrument and hasattr(self.instrument, 'sock') and self.instrument.sock
-
-    def is_valid_ip(self, ip_str):
-        """验证IP地址格式是否为xxx.xxx.xxx.xxx"""
-        parts = ip_str.split('.')
-        if len(parts) != 4:
-            return False
-        for part in parts:
-            if not part.isdigit():
-                return False
-            num = int(part)
-            if num < 0 or num > 255:
-                return False
-        return True
 
     def is_valid_ip(self, ip_str):
         """验证IP地址格式是否为xxx.xxx.xxx.xxx"""
@@ -753,20 +831,35 @@ class SCPIGUI(QMainWindow):
         # 组合为标准IP格式
         self.host_input.setText('.'.join(formatted[:4]))
 
+    def set_connection_ui(self, connected):
+        """设置连接状态UI"""
+        if connected:
+            self.connection_status.setText("🟢 已连接")
+            self.connection_status.setStyleSheet("""
+                QLabel {
+                    background-color: #e8f5e9;
+                    color: #2e7d32;
+                }
+            """)
+            self.connect_btn.setText("断开")
+            self.execute_btn.setEnabled(True)
+        else:
+            self.connection_status.setText("🔴 未连接")
+            self.connection_status.setStyleSheet("""
+                QLabel {
+                    background-color: #ffebee;
+                    color: #c62828;
+                }
+            """)
+            self.connect_btn.setText("连接")
+            self.execute_btn.setEnabled(False)
+
     def toggle_connection(self):
         """连接/断开上位机"""
         if self.is_connected():
             try:
                 self.instrument.disconnect()
-                self.connection_status.setText("🔴 未连接")
-                self.connection_status.setStyleSheet("""
-                    QLabel {
-                        background-color: #ffebee;
-                        color: #c62828;
-                    }
-                """)
-                self.connect_btn.setText("连接")
-                self.execute_btn.setEnabled(False)
+                self.set_connection_ui(False)
                 self.instrument_info.setText("未获取")
                 self.append_output("已断开上位机连接")
                 self.execution_status.setText("🟡 空闲")
@@ -805,15 +898,7 @@ class SCPIGUI(QMainWindow):
                     self.append_output(f"获取仪器信息错误: {str(e)}", "ERROR")
                     logger.error(f"获取仪器信息失败: {str(e)}")
                 
-                self.connection_status.setText("🟢 已连接")
-                self.connection_status.setStyleSheet("""
-                    QLabel {
-                        background-color: #e8f5e9;
-                        color: #2e7d32;
-                    }
-                """)
-                self.connect_btn.setText("断开")
-                self.execute_btn.setEnabled(True)
+                self.set_connection_ui(True)
                 self.append_output(f"已连接到 {host}:{port}")
                 if idn:
                     self.append_output(f"仪器标识: {idn}")
@@ -859,13 +944,7 @@ class SCPIGUI(QMainWindow):
         self.execute_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
         self.connect_btn.setEnabled(False)
-        self.execution_status.setText("🟠 执行中")
-        self.execution_status.setStyleSheet("""
-            QLabel {
-                background-color: #fff3e0;
-                color: #e65100;
-            }
-        """)
+        self.set_execution_state('executing')
         self.append_output(f"开始执行 {len(commands)} 条命令，重复 {repeat} 次...")
 
         # 创建工作线程
@@ -905,19 +984,61 @@ class SCPIGUI(QMainWindow):
             self.append_output("正在停止执行...")
             self.stop_btn.setEnabled(False)
 
+    def set_execution_state(self, state):
+        """设置执行状态UI
+        Args:
+            state: 执行状态 ('idle', 'executing', 'completed', 'error')
+        """
+        styles = {
+            'idle': {
+                'text': "🟡 空闲",
+                'style': """
+                    QLabel {
+                        background-color: #fff8e1;
+                        color: #ff8f00;
+                    }
+                """
+            },
+            'executing': {
+                'text': "🟠 执行中", 
+                'style': """
+                    QLabel {
+                        background-color: #fff3e0;
+                        color: #e65100;
+                    }
+                """
+            },
+            'completed': {
+                'text': "🟢 完成",
+                'style': """
+                    QLabel {
+                        background-color: #e8f5e9;
+                        color: #2e7d32;
+                    }
+                """
+            },
+            'error': {
+                'text': "🔴 错误",
+                'style': """
+                    QLabel {
+                        background-color: #ffebee;
+                        color: #c62828;
+                    }
+                """
+            }
+        }
+        
+        if state in styles:
+            self.execution_status.setText(styles[state]['text'])
+            self.execution_status.setStyleSheet(styles[state]['style'])
+
     def handle_execution_finished(self):
         """处理执行完成"""
         self.append_output("命令执行完成")
         self.execute_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         self.connect_btn.setEnabled(True)
-        self.execution_status.setText("� 空闲")
-        self.execution_status.setStyleSheet("""
-            QLabel {
-                background-color: #e8f5e9;
-                color: #2e7d32;
-            }
-        """)
+        self.set_execution_state('completed')
         self.progress_bar.setValue(100)
         self.worker = None
 
@@ -928,13 +1049,7 @@ class SCPIGUI(QMainWindow):
         self.execute_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         self.connect_btn.setEnabled(True)
-        self.execution_status.setText("🔴 错误")
-        self.execution_status.setStyleSheet("""
-            QLabel {
-                background-color: #ffebee;
-                color: #c62828;
-            }
-        """)
+        self.set_execution_state('error')
         self.progress_bar.setValue(0)
         self.worker = None
         QMessageBox.critical(self, "执行错误", error_msg)
@@ -946,7 +1061,6 @@ class SCPIGUI(QMainWindow):
             current_item = self.command_list.takeItem(current_row)
             self.command_list.insertItem(current_row - 1, current_item)
             self.command_list.setCurrentRow(current_row - 1)
-            self.preset_combo.setCurrentIndex(0)  # 重置预设选择
 
     def move_command_down(self):
         """将选中的命令向下移动一位"""
@@ -955,7 +1069,35 @@ class SCPIGUI(QMainWindow):
             current_item = self.command_list.takeItem(current_row)
             self.command_list.insertItem(current_row + 1, current_item)
             self.command_list.setCurrentRow(current_row + 1)
-            self.preset_combo.setCurrentIndex(0)  # 重置预设选择
+
+
+    def show_command_context_menu(self, position):
+        """显示命令列表的右键菜单"""
+        menu = QMenu()
+        item = self.command_list.itemAt(position)
+        
+        # 添加菜单项
+        move_up_action = menu.addAction("⬆️ 上移")
+        move_down_action = menu.addAction("⬇️ 下移")
+        edit_action = menu.addAction("✏️ 编辑")
+        remove_action = menu.addAction("➖ 删除") 
+        clear_action = menu.addAction("🗑️ 清空")
+        
+        # 连接信号
+        edit_action.triggered.connect(self.edit_command)
+        remove_action.triggered.connect(self.remove_command)
+        move_up_action.triggered.connect(self.move_command_up)
+        move_down_action.triggered.connect(self.move_command_down)
+        clear_action.triggered.connect(self.clear_commands)
+        
+        # 设置启用状态
+        state = item is not None
+        edit_action.setEnabled(state)
+        remove_action.setEnabled(state)
+        move_up_action.setEnabled(state)
+        move_down_action.setEnabled(state)
+        
+        menu.exec_(self.command_list.viewport().mapToGlobal(position))
 
     def edit_command(self):
         """编辑选中的命令"""
@@ -973,7 +1115,6 @@ class SCPIGUI(QMainWindow):
                 new_text = dialog.textValue().strip()
                 if new_text:
                     current_item.setText(new_text)
-                    self.preset_combo.setCurrentIndex(0)  # 重置预设选择
 
     def append_output(self, text, level="INFO"):
         """追加文本到输出区域并记录到日志"""
