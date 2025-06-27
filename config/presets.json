@@ -1,15 +1,5 @@
 {
     "presets": {
-        "Basic Query": {
-            "description": "基本查询命令 -- basic query",
-            "commands": [
-                "*IDN?",
-                "*OPT?",
-                "*STB?"
-            ],
-            "repeat": 1,
-            "interval": 0.5
-        },
         "Clear and Run": {
             "description": "清除并运行采集 -- clean and run",
             "commands": [
@@ -30,6 +20,23 @@
             ],
             "repeat": 3,
             "interval": 0.8
+        },
+        "查询目标温度": {
+            "description": "查询釆保和FPGA目标温度",
+            "commands": [
+                ":SYSTem:INSTrument:FAN:AUTO:TARGet:FPGA?",
+                ":SYSTem:INSTrument:FAN:AUTO:TARGet:TH?"
+            ],
+            "repeat": 1,
+            "interval": 1.0
+        },
+        "查询型号": {
+            "description": "查询机器型号、PN、SN",
+            "commands": [
+                "*IDN?"
+            ],
+            "repeat": 1,
+            "interval": 0.5
         }
     }
 }
