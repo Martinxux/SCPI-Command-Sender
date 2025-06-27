@@ -22,8 +22,8 @@ class Logger:
             os.makedirs(self.log_dir)
     
     def _get_log_file_path(self):
-        """获取日志文件路径(精确到秒)"""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        """获取日志文件路径(精确到天)"""
+        timestamp = datetime.now().strftime("%Y%m%d")
         return os.path.join(self.log_dir, f"SCPI_Log_{timestamp}.log")
     
     def _setup_file_handler(self):
