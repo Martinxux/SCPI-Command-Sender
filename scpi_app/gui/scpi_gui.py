@@ -152,6 +152,9 @@ class SCPIGUI(QMainWindow):
         self.setWindowTitle("SCPI Command Sender")
         self.resize(950, 970)
         self.load_default_presets()
+        
+        # 连接输出区域的自动滚动
+        self.output_area.textChanged.connect(self.auto_scroll_output)
 
     def init_ui(self):
         """初始化用户界面"""
@@ -1116,11 +1119,16 @@ class SCPIGUI(QMainWindow):
                 if new_text:
                     current_item.setText(new_text)
 
+    def auto_scroll_output(self):
+        """自动滚动输出区域到底部"""
+        scroll_bar = self.output_area.verticalScrollBar()
+        scroll_bar.setValue(scroll_bar.maximum())
+        self.output_area.ensureCursorVisible()
+
     def append_output(self, text, level="INFO"):
         """追加文本到输出区域并记录到日志"""
         # 添加到输出区域
         self.output_area.append(text)
-        self.output_area.ensureCursorVisible()
         
         # 检测并去除时间戳
         if text.startswith("[") and "]" in text:
