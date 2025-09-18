@@ -11,6 +11,7 @@ from PyQt5.QtGui import QIcon
 from scpi_app.core.logger import logger
 from scpi_app.core.ezsetting import DCAConfigurator
 from scpi_app.core.scpi import SCPIError, SCPIInstrument
+from .styles import STYLES, execution_state_STYLES
 
 VERSION = "v2.1.0.20250918"
 
@@ -77,55 +78,6 @@ class SCPIWorker(QThread):
 
 class SCPIGUI(QMainWindow):
     """SCPI命令发送器的主GUI窗口"""
-
-    # 定义公共样式常量
-    STYLES = {
-        "button": """
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                padding: 5px 10px;
-                border-radius: 3px;
-                min-width: 60px;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-            QPushButton:pressed {
-                background-color: #3d8b40;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-            }
-        """,
-        "input": """
-            QLineEdit, QTextEdit, QListWidget, QComboBox, QSpinBox, QDoubleSpinBox {
-                border: 1px solid #ccc;
-                border-radius: 3px;
-                padding: 3px;
-            }
-        """,
-        "groupbox": """
-            QGroupBox {
-                border: 1px solid #ccc;
-                border-radius: 5px;
-                margin-top: 10px;
-                padding-top: 15px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 3px;
-            }
-        """,
-        "textedit": """
-            QTextEdit {
-                font-family: 'Consolas', 'Courier New', monospace;
-            }
-        """
-    }
-
     def __init__(self):
         super().__init__()
         self.instrument_info = None
@@ -196,10 +148,10 @@ class SCPIGUI(QMainWindow):
                 font-family: 'Segoe UI', Arial, sans-serif;
                 font-size: 10pt;
             }}
-            {self.STYLES["button"]}
-            {self.STYLES["input"]}
-            {self.STYLES["groupbox"]}
-            {self.STYLES["textedit"]}
+            {STYLES["button"]}
+            {STYLES["input"]}
+            {STYLES["groupbox"]}
+            {STYLES["textedit"]}
             /* 连接状态指示器 */
             .connected {{ color: #4CAF50; }}
             .disconnected {{ color: #f44336; }}
@@ -212,12 +164,7 @@ class SCPIGUI(QMainWindow):
 
         # 连接设置区域
         conn_group = QGroupBox("上位机连接")
-        conn_group.setStyleSheet("""
-            QGroupBox { 
-                background-color: #f9f9f9;
-                padding: 10px;
-            }
-        """)
+        conn_group.setStyleSheet(STYLES["hostconnect"])  # 统一样式
         conn_layout = QHBoxLayout()
         conn_layout.setSpacing(10)
         conn_layout.setContentsMargins(5, 5, 5, 5)
@@ -253,33 +200,13 @@ class SCPIGUI(QMainWindow):
         # 连接按钮
         self.connect_btn = QPushButton("连接")
         self.connect_btn.setFixedWidth(80)
-        self.connect_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                padding: 5px;
-                min-width: 80px;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-        """)
+        self.connect_btn.setStyleSheet(STYLES["connectbtn"])
         self.connect_btn.clicked.connect(self.toggle_connection)
         conn_layout.addWidget(self.connect_btn)
 
         # 上位机信息显示
         self.instrument_info = QLabel("未获取")
-        self.instrument_info.setStyleSheet("""
-            QLabel {
-                padding: 2px 8px;
-                border-radius: 3px;
-                background-color: #e3f2fd;
-                color: #0d47a1;
-                font: 9pt;
-                min-width: 200px;
-                qproperty-alignment: AlignCenter;
-            }
-        """)
+        self.instrument_info.setStyleSheet(STYLES["Label_not_acquired"])
         self.instrument_info.setToolTip("仪器标识信息")
         conn_layout.addWidget(self.instrument_info, stretch=1)  # 设置stretch因子使其可以缩放
         # 将连接设置区域添加到主布局
@@ -287,17 +214,17 @@ class SCPIGUI(QMainWindow):
 
         # 配置加载区域
         self.config_group = QGroupBox("设置管理")
-        self.config_group.setStyleSheet(self.STYLES["groupbox"])  # 统一样式
+        self.config_group.setStyleSheet(STYLES["groupbox"])  # 统一样式
         self.config_layout = QHBoxLayout(self.config_group)
 
         # 配置名称下拉框
         self.config_combo = QComboBox()
-        self.config_combo.setStyleSheet(self.STYLES["input"])  # 设置输入框样式
+        self.config_combo.setStyleSheet(STYLES["input"])  # 设置输入框样式
         self.config_layout.addWidget(self.config_combo)
 
         # 应用配置按钮
         self.apply_config_btn = QPushButton("应用设置")
-        self.apply_config_btn.setStyleSheet(self.STYLES["button"])
+        self.apply_config_btn.setStyleSheet(STYLES["button"])
         self.apply_config_btn.clicked.connect(self.apply_configuration)
         self.config_layout.addWidget(self.apply_config_btn)
 
@@ -324,25 +251,13 @@ class SCPIGUI(QMainWindow):
         
         self.save_preset_btn = QPushButton("💾 保存预设")
         self.save_preset_btn.setToolTip("保存当前配置为预设")
-        self.save_preset_btn.setStyleSheet("""
-            background-color: #2196F3;
-            color: white;
-            padding: 3px 8px;
-            border-radius: 4px;
-            min-width: 60px;
-        """)
+        self.save_preset_btn.setStyleSheet(STYLES["SavePresetBtn"])
         self.save_preset_btn.clicked.connect(self.save_preset_to_file)
         btn_layout.addWidget(self.save_preset_btn)
         
         self.del_preset_btn = QPushButton("🗑️ 删除预设")
         self.del_preset_btn.setToolTip("删除当前选中预设")
-        self.del_preset_btn.setStyleSheet("""
-            background-color: #F44336;
-            color: white;
-            padding: 3px 8px;
-            border-radius: 4px;
-            min-width: 60px;
-        """)
+        self.del_preset_btn.setStyleSheet(STYLES["DelPresetBtn"])
         self.del_preset_btn.clicked.connect(self.del_preset)
         btn_layout.addWidget(self.del_preset_btn)
         
@@ -352,20 +267,7 @@ class SCPIGUI(QMainWindow):
         # 命令列表
         self.command_list = QListWidget()
         self.command_list.setMinimumHeight(150)
-        self.command_list.setStyleSheet("""
-            QListWidget {
-                border: 1px solid #ddd;
-                background-color: white;
-            }
-            QListWidget::item {
-                padding: 4px;
-                border-bottom: 1px solid #eee;
-            }
-            QListWidget::item:selected {
-                background-color: #e0f7fa;
-                color: black;
-            }
-        """)
+        self.command_list.setStyleSheet(STYLES["cmdlist"])
         self.command_list.setDragDropMode(QListWidget.InternalMove)  # 启用拖拽排序
         self.command_list.itemDoubleClicked.connect(self.edit_command)  # 双击编辑
         self.command_list.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -421,37 +323,13 @@ class SCPIGUI(QMainWindow):
         exec_btn_layout.setSpacing(8)
         
         self.execute_btn = QPushButton("🚀 循环执行预设命令")
-        self.execute_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #9C27B0;
-                font-weight: bold;
-                padding: 8px 16px;
-            }
-            QPushButton:hover {
-                background-color: #7B1FA2;
-            }
-            QPushButton:disabled {
-                background-color: #BDBDBD;
-            }
-        """)
+        self.execute_btn.setStyleSheet(STYLES["loop_preset_btn"])
         self.execute_btn.clicked.connect(self.execute_commands)
         self.execute_btn.setEnabled(False)
         exec_btn_layout.addWidget(self.execute_btn)
         
         self.stop_btn = QPushButton("🛑 停止")
-        self.stop_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #f44336;
-                font-weight: bold;
-                padding: 8px 16px;
-            }
-            QPushButton:hover {
-                background-color: #d32f2f;
-            }
-            QPushButton:disabled {
-                background-color: #BDBDBD;
-            }
-        """)
+        self.stop_btn.setStyleSheet(STYLES["stop_loop_btn"])
         self.stop_btn.clicked.connect(self.stop_execution)
         self.stop_btn.setEnabled(False)
         exec_btn_layout.addWidget(self.stop_btn)
@@ -460,18 +338,7 @@ class SCPIGUI(QMainWindow):
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
-        self.progress_bar.setStyleSheet("""
-            QProgressBar {
-                border: 1px solid #ccc;
-                border-radius: 3px;
-                text-align: center;
-                height: 20px;
-            }
-            QProgressBar::chunk {
-                background-color: #4CAF50;
-                width: 10px;
-            }
-        """)
+        self.progress_bar.setStyleSheet(STYLES["progressbar"])
         exec_btn_layout.addWidget(self.progress_bar, stretch=1)
         
         exec_layout.addLayout(exec_btn_layout)
@@ -488,27 +355,13 @@ class SCPIGUI(QMainWindow):
         output_layout = QVBoxLayout()
         self.output_area = QTextEdit()
         self.output_area.setReadOnly(True)
-        self.output_area.setStyleSheet("""
-            QTextEdit {
-                background-color: #263238;
-                color: #ECEFF1;
-                border: 1px solid #37474F;
-                font-family: 'Consolas', 'Courier New', monospace;
-                font-size: 10pt;
-            }
-        """)
+        self.output_area.setStyleSheet(STYLES["QTextEdit_output"])
         output_layout.addWidget(self.output_area)
         output_group.setLayout(output_layout)
 
         # 状态栏
         self.status_bar = QStatusBar()
-        self.status_bar.setStyleSheet("""
-            QStatusBar {
-                background-color: #f5f5f5;
-                border-top: 1px solid #ddd;
-                font-size: 9pt;
-            }
-        """)
+        self.status_bar.setStyleSheet(STYLES["QStatusBar"])
         # 版本信息
         self.version_label = QLabel(f"版本: {VERSION}")
         self.version_label.setStyleSheet("color: #666; font-size: 9pt;")
@@ -516,28 +369,12 @@ class SCPIGUI(QMainWindow):
         
         # 连接状态指示器
         self.connection_status = QLabel("🔴 未连接")
-        self.connection_status.setStyleSheet("""
-            QLabel {
-                padding: 2px 8px;
-                border-radius: 3px;
-                background-color: #ffebee;
-                color: #c62828;
-                font-weight: bold;
-            }
-        """)
+        self.connection_status.setStyleSheet(STYLES["QLabel_noconnect"])
         self.status_bar.addPermanentWidget(self.connection_status)
         
         # 执行状态指示器
         self.execution_status = QLabel("🟡 空闲")
-        self.execution_status.setStyleSheet("""
-            QLabel {
-                padding: 2px 8px;
-                border-radius: 3px;
-                background-color: #fff8e1;
-                color: #ff8f00;
-                font-weight: bold;
-            }
-        """)
+        self.execution_status.setStyleSheet(STYLES["QLabel_idle"])
         self.status_bar.addPermanentWidget(self.execution_status)
         
         self.setStatusBar(self.status_bar)
@@ -600,9 +437,6 @@ class SCPIGUI(QMainWindow):
         self.append_output(f"{timestamp} 命令数量: {len(preset['commands'])}")
         self.append_output(f"{timestamp} 重复次数: {preset['repeat']}")
         self.append_output(f"{timestamp} 间隔时间: {preset['interval']}秒")
-        # self.append_output(f"{timestamp} 预设内容:")
-        # for i, cmd in enumerate(preset["commands"], 1):
-        #     self.append_output(f"{timestamp}   {i}. {cmd}")
 
     def load_preset_from_file(self):
         """从文件加载预设"""
@@ -931,12 +765,7 @@ class SCPIGUI(QMainWindow):
                         pass
                     self.instrument = None
                 self.connection_status.setText("🔴 未连接")
-                self.connection_status.setStyleSheet("""
-                    QLabel {
-                        background-color: #ffebee;
-                        color: #c62828;
-                    }
-                """)
+                self.connection_status.setStyleSheet(STYLES["disconnect_status"])
                 self.connect_btn.setText("连接")
                 self.execute_btn.setEnabled(False)
                 self.instrument_info.setText("连接失败")
@@ -1008,48 +837,9 @@ class SCPIGUI(QMainWindow):
         Args:
             state: 执行状态 ('idle', 'executing', 'completed', 'error')
         """
-        styles = {
-            'idle': {
-                'text': "🟡 空闲",
-                'style': """
-                    QLabel {
-                        background-color: #fff8e1;
-                        color: #ff8f00;
-                    }
-                """
-            },
-            'executing': {
-                'text': "🟠 执行中", 
-                'style': """
-                    QLabel {
-                        background-color: #fff3e0;
-                        color: #e65100;
-                    }
-                """
-            },
-            'completed': {
-                'text': "🟢 完成",
-                'style': """
-                    QLabel {
-                        background-color: #e8f5e9;
-                        color: #2e7d32;
-                    }
-                """
-            },
-            'error': {
-                'text': "🔴 错误",
-                'style': """
-                    QLabel {
-                        background-color: #ffebee;
-                        color: #c62828;
-                    }
-                """
-            }
-        }
-        
-        if state in styles:
-            self.execution_status.setText(styles[state]['text'])
-            self.execution_status.setStyleSheet(styles[state]['style'])
+        if state in execution_state_STYLES:
+            self.execution_status.setText(execution_state_STYLES[state]['text'])
+            self.execution_status.setStyleSheet(execution_state_STYLES[state]['style'])
 
     def handle_execution_finished(self):
         """处理执行完成"""
