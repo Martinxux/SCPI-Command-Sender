@@ -1,88 +1,16 @@
 import sys
 import json
 import os
+import time
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QTextEdit, QPushButton, QSpinBox, QDoubleSpinBox,
                              QListWidget, QComboBox, QMessageBox, QFileDialog, QGroupBox, QInputDialog, 
                              QStatusBar, QDialog, QProgressBar, QMenu)
 from PyQt5.QtCore import QThread, pyqtSignal, Qt
 from PyQt5.QtGui import QIcon
-import socket
-import time
-
 from scpi_app.core.logger import logger
 from scpi_app.core.ezsetting import DCAConfigurator
-
-
-class SCPIError(Exception):
-    """自定义SCPI错误类"""
-    pass
-
-
-class SCPIInstrument:
-    def __init__(self, host='127.0.0.1', port=8805):
-        self.host = host
-        self.port = port
-        self.sock = None
-        self.timeout = 10
-
-    def connect(self):
-        """连接上位机"""
-        try:
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.settimeout(self.timeout)
-            self.sock.connect((self.host, self.port))
-            return True
-        except socket.timeout:
-            raise SCPIError("连接超时，请检查上位机IP和端口")
-        except ConnectionRefusedError:
-            raise SCPIError("连接被拒绝，请确保:\n1. 上位机IP地址正确\n2. 上位机SCPI服务已启用\n3. 防火墙允许该端口连接")
-        except Exception as e:
-            raise SCPIError(f"连接错误: {str(e)}")
-
-    def disconnect(self):
-        """断开连接"""
-        if self.sock:
-            self.sock.close()
-            self.sock = None
-
-    def is_connected(self) -> bool:
-        """检查是否已连接"""
-        return self.sock is not None
-
-    def send_command(self, command, timeout=5.0):
-        """
-        发送SCPI命令并获取响应(如果有)
-
-        参数:
-            command: SCPI命令
-            timeout: 响应超时时间(秒)
-
-        返回:
-            响应内容(对于查询命令)或None
-        """
-        if not self.sock:
-            raise SCPIError("未连接到上位机")
-
-        try:
-            # 发送命令(添加换行符)
-            full_cmd = command + '\n'
-            self.sock.sendall(full_cmd.encode('utf-8'))
-
-            # 如果是查询命令，等待响应
-            if command.endswith('?'):
-                self.sock.settimeout(timeout)
-                response = self.sock.recv(1024)
-                if response:
-                    return response.decode('utf-8').strip()
-                return None
-            return None
-
-        except socket.timeout:
-            raise SCPIError(f"命令 '{command}' 超时")
-        except Exception as e:
-            raise SCPIError(f"发送命令 '{command}' 时出错: {str(e)}")
-
+from scpi_app.core.scpi import SCPIError, SCPIInstrument
 
 class SCPIWorker(QThread):
     """用于在后台执行SCPI命令的工作线程"""
@@ -104,8 +32,15 @@ class SCPIWorker(QThread):
         self._is_running = False
 
     def run(self):
-        """线程执行的主方法"""
+        """
+        线程执行的主方法
+        
+        注意: 此方法运行在独立线程中，所有GUI操作必须通过信号槽完成
+        """
         try:
+            if not self._is_running:
+                return
+                
             total_commands = len(self.commands) * self.repeat
             commands_executed = 0
             
@@ -235,24 +170,6 @@ class SCPIGUI(QMainWindow):
         self.main_layout.setContentsMargins(10, 10, 10, 10)
         self.main_layout.setSpacing(10)
 
-        # 配置加载区域
-        self.config_group = QGroupBox("配置加载")
-        self.config_group.setStyleSheet(self.STYLES["groupbox"])
-        self.config_layout = QHBoxLayout(self.config_group)
-
-        # 配置名称下拉框
-        self.config_combo = QComboBox()
-        self.config_combo.setStyleSheet(self.STYLES["input"])
-        self.config_combo.setPlaceholderText("选择配置")
-        self.config_layout.addWidget(self.config_combo)
-
-        # 应用配置按钮
-        self.apply_config_btn = QPushButton("应用配置")
-        self.apply_config_btn.setStyleSheet(self.STYLES["button"])
-        self.apply_config_btn.clicked.connect(self.apply_configuration)
-        self.config_layout.addWidget(self.apply_config_btn)
-
-        self.main_layout.addWidget(self.config_group)
         # 设置全局样式
         self.setStyleSheet(f"""
             QWidget {{
@@ -347,6 +264,22 @@ class SCPIGUI(QMainWindow):
         conn_layout.addWidget(self.instrument_info, stretch=1)  # 设置stretch因子使其可以缩放
         # 将连接设置区域添加到主布局
         conn_group.setLayout(conn_layout)
+
+                # 配置加载区域
+        self.config_group = QGroupBox("配置管理")
+        self.config_group.setStyleSheet(self.STYLES["groupbox"])  # 统一样式
+        self.config_layout = QHBoxLayout(self.config_group)
+
+        # 配置名称下拉框
+        self.config_combo = QComboBox()
+        self.config_combo.setStyleSheet(self.STYLES["input"])  # 设置输入框样式
+        self.config_layout.addWidget(self.config_combo)
+
+        # 应用配置按钮
+        self.apply_config_btn = QPushButton("应用配置")
+        self.apply_config_btn.setStyleSheet(self.STYLES["button"])
+        self.apply_config_btn.clicked.connect(self.apply_configuration)
+        self.config_layout.addWidget(self.apply_config_btn)
 
         # 命令设置区域
         cmd_group = QGroupBox("命令设置")
@@ -584,31 +517,11 @@ class SCPIGUI(QMainWindow):
         self.status_bar.addPermanentWidget(self.execution_status)
         
         self.setStatusBar(self.status_bar)
-
-        # 配置加载区域
-        config_group = QGroupBox("设置管理")
-        config_layout = QHBoxLayout()
-        
-        
-        # 配置名称下拉框
-        self.config_combo = QComboBox()
-        self.config_combo.setStyleSheet(self.STYLES["input"])
-        
-        # 应用配置按钮
-        self.apply_config_btn = QPushButton("应用设置")
-        self.apply_config_btn.setStyleSheet(self.STYLES["button"])
-        self.apply_config_btn.clicked.connect(self.apply_configuration)
-
-        config_layout.addWidget(self.config_combo)
-        config_layout.addWidget(self.apply_config_btn)
-        config_group.setLayout(config_layout)
-        
-        main_layout.addWidget(conn_group)
-        main_layout.addWidget(cmd_group)
-        main_layout.addWidget(config_group)
-        main_layout.addWidget(output_group)
-        main_widget.setLayout(main_layout)
-        self.setCentralWidget(main_widget)
+        # 主布局顺序
+        self.main_layout.addWidget(conn_group)      # 上位机连接
+        self.main_layout.addWidget(self.config_group)   # 配置管理
+        self.main_layout.addWidget(cmd_group)       # 命令设置
+        self.main_layout.addWidget(output_group)    # 输出区域
 
     def load_default_presets(self):
         """从配置文件加载预设"""
