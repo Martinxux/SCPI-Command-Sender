@@ -113,7 +113,10 @@ class SCPIWorker(QThread):
                         
                     try:
                         response = self.instrument.send_command(cmd)
-                        self.command_sent.emit(cmd, str(response) if response else "No response", loop_num)
+                        if cmd.endswith('?'):
+                            self.command_sent.emit(cmd, str(response) if response else "No response", loop_num)
+                        else:
+                            self.command_sent.emit(cmd, "", loop_num)
                         commands_executed += 1
                         self.progress_updated.emit(commands_executed, total_commands)
 
@@ -859,6 +862,7 @@ class SCPIGUI(QMainWindow):
 
     def toggle_connection(self):
         """连接/断开上位机"""
+        idn = None  # 初始化idn变量
         if self.is_connected():
             try:
                 self.instrument.disconnect()
