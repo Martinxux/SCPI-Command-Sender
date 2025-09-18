@@ -12,6 +12,8 @@ from scpi_app.core.logger import logger
 from scpi_app.core.ezsetting import DCAConfigurator
 from scpi_app.core.scpi import SCPIError, SCPIInstrument
 
+VERSION = "v2.1.0.20250918"
+
 class SCPIWorker(QThread):
     """用于在后台执行SCPI命令的工作线程"""
     command_sent = pyqtSignal(str, str, int)  # 信号：命令发送、响应和循环次数
@@ -140,6 +142,9 @@ class SCPIGUI(QMainWindow):
         else:
             logger.warning(f"图标文件未找到: {icon_path}")
             
+        # 初始化菜单栏
+        self.init_menu_bar()
+        
         self.init_ui()
         self.setWindowTitle("SCPI Command Sender")
         self.resize(950, 970)
@@ -152,15 +157,30 @@ class SCPIGUI(QMainWindow):
                 configurations = self.configurator.load_configurations(config_path)
                 self.config_combo.clear()
                 self.config_combo.addItems(configurations.keys())
-                self.output_area.append(f"[配置] 加载成功: {config_path}")
+                self.output_area.append(f"[设置] 加载成功: {config_path}")
             except Exception as e:
-                self.output_area.append(f"[配置] 加载失败: {str(e)}")
+                self.output_area.append(f"[设置] 加载失败: {str(e)}")
         else:
-            self.output_area.append(f"[配置] 配置文件未找到: {config_path}")
+            self.output_area.append(f"[设置] 设置文件未找到: {config_path}")
         
         # 连接输出区域的自动滚动
         self.output_area.textChanged.connect(self.auto_scroll_output)
 
+    def init_menu_bar(self):
+        """初始化菜单栏"""
+        menubar = self.menuBar()
+        
+        # 帮助菜单
+        help_menu = menubar.addMenu("帮助")
+        
+        # 关于选项
+        about_action = help_menu.addAction("关于")
+        about_action.triggered.connect(self.show_about)
+    
+    def show_about(self):
+        """显示关于对话框"""
+        QMessageBox.about(self, "关于", f"SCPI Command Sender\n版本: {VERSION}")
+        
     def init_ui(self):
         """初始化用户界面"""
         # 主布局
@@ -265,8 +285,8 @@ class SCPIGUI(QMainWindow):
         # 将连接设置区域添加到主布局
         conn_group.setLayout(conn_layout)
 
-                # 配置加载区域
-        self.config_group = QGroupBox("配置管理")
+        # 配置加载区域
+        self.config_group = QGroupBox("设置管理")
         self.config_group.setStyleSheet(self.STYLES["groupbox"])  # 统一样式
         self.config_layout = QHBoxLayout(self.config_group)
 
@@ -276,7 +296,7 @@ class SCPIGUI(QMainWindow):
         self.config_layout.addWidget(self.config_combo)
 
         # 应用配置按钮
-        self.apply_config_btn = QPushButton("应用配置")
+        self.apply_config_btn = QPushButton("应用设置")
         self.apply_config_btn.setStyleSheet(self.STYLES["button"])
         self.apply_config_btn.clicked.connect(self.apply_configuration)
         self.config_layout.addWidget(self.apply_config_btn)
@@ -489,6 +509,10 @@ class SCPIGUI(QMainWindow):
                 font-size: 9pt;
             }
         """)
+        # 版本信息
+        self.version_label = QLabel(f"版本: {VERSION}")
+        self.version_label.setStyleSheet("color: #666; font-size: 9pt;")
+        self.status_bar.addPermanentWidget(self.version_label)
         
         # 连接状态指示器
         self.connection_status = QLabel("🔴 未连接")

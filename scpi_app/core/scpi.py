@@ -8,7 +8,6 @@ class SCPIError(Exception):
     """自定义SCPI错误类"""
     pass
 
-
 class SCPIInstrument:
     def __init__(self, host='127.0.0.1', port=8805):
         self.host = host
