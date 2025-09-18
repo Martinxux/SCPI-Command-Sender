@@ -5,7 +5,8 @@
             "commands": [
                 "*CLS",
                 ":ACQuire:CDISplay",
-                ":ACQ:RUN"
+                ":ACQ:RUN",
+                "*OPC?"
             ],
             "repeat": 1,
             "interval": 1.0

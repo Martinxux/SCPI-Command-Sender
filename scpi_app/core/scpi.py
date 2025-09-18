@@ -69,7 +69,16 @@ class SCPIInstrument:
             # 如果是查询命令，等待响应
             if command.endswith('?'):
                 self.sock.settimeout(timeout)
-                response = self.sock.recv(1024)
+                response = b''
+                while True:
+                    try:
+                        chunk = self.sock.recv(4096)  # 增加缓冲区大小
+                        if not chunk:
+                            break
+                        response += chunk
+                    except socket.timeout:
+                        break
+                
                 if response:
                     decoded = response.decode('utf-8').strip()
                     logger.info(f"收到响应: {decoded}")
@@ -77,9 +86,9 @@ class SCPIInstrument:
                 logger.warning("查询命令但无响应")
                 return ""  # 返回空字符串而不是None
             else:
-                # 对于设置命令，返回确认响应
+                # 对于设置命令，不返回任何内容
                 logger.info("设置命令执行成功")
-                return "OK"
+                return ""
 
         except socket.timeout:
             logger.error(f"命令 '{command}' 超时")
@@ -105,8 +114,12 @@ class SCPIInstrument:
         for loop in range(repeat):
             for cmd in commands:
                 try:
-                    response = self.send_command(cmd)
-                    results.append((cmd, response))
+                    if cmd.endswith('?'):
+                        response = self.send_command(cmd)
+                        results.append((cmd, response))
+                    else:
+                        self.send_command(cmd)
+                        results.append((cmd, "OK"))
                     # 等待间隔(最后一次循环的最后一个命令后不等待)
                     if not (loop == repeat - 1 and cmd == commands[-1]):
                         time.sleep(interval)
