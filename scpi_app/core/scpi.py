@@ -10,13 +10,13 @@ class SCPIError(Exception):
 
 
 class SCPIInstrument:
-    def __init__(self, host: str = '127.0.0.1', port: int = 8805):
+    def __init__(self, host='127.0.0.1', port=8805):
         self.host = host
         self.port = port
         self.sock = None
         self.timeout = 10
 
-    def connect(self) -> bool:
+    def connect(self):
         """连接上位机"""
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -33,19 +33,14 @@ class SCPIInstrument:
     def disconnect(self):
         """断开连接"""
         if self.sock:
-            try:
-                self.sock.close()
-                logger.info("连接已断开")
-            except Exception as e:
-                logger.error(f"断开连接时出错: {str(e)}")
-            finally:
-                self.sock = None
+            self.sock.close()
+            self.sock = None
 
     def is_connected(self) -> bool:
         """检查是否已连接"""
         return self.sock is not None
 
-    def send_command(self, command: str, timeout: float = 5.0) -> str:
+    def send_command(self, command, timeout=5.0):
         """
         发送SCPI命令并获取响应(如果有)
 
@@ -54,47 +49,28 @@ class SCPIInstrument:
             timeout: 响应超时时间(秒)
 
         返回:
-            对于查询命令: 返回响应内容或空字符串(如果无响应)
-            对于设置命令: 返回"OK"表示成功
+            响应内容(对于查询命令)或None
         """
-        if not self.is_connected():
+        if not self.sock:
             raise SCPIError("未连接到上位机")
 
         try:
             # 发送命令(添加换行符)
             full_cmd = command + '\n'
-            logger.info(f"发送命令: {command}")
             self.sock.sendall(full_cmd.encode('utf-8'))
 
             # 如果是查询命令，等待响应
             if command.endswith('?'):
                 self.sock.settimeout(timeout)
-                response = b''
-                while True:
-                    try:
-                        chunk = self.sock.recv(4096)  # 增加缓冲区大小
-                        if not chunk:
-                            break
-                        response += chunk
-                    except socket.timeout:
-                        break
-                
+                response = self.sock.recv(1024)
                 if response:
-                    decoded = response.decode('utf-8').strip()
-                    logger.info(f"收到响应: {decoded}")
-                    return decoded
-                logger.warning("查询命令但无响应")
-                return ""  # 返回空字符串而不是None
-            else:
-                # 对于设置命令，不返回任何内容
-                logger.info("设置命令执行成功")
-                return ""
+                    return response.decode('utf-8').strip()
+                return None
+            return None
 
         except socket.timeout:
-            logger.error(f"命令 '{command}' 超时")
             raise SCPIError(f"命令 '{command}' 超时")
         except Exception as e:
-            logger.error(f"发送命令 '{command}' 时出错: {str(e)}")
             raise SCPIError(f"发送命令 '{command}' 时出错: {str(e)}")
 
     def send_command_sequence(self, commands: List[str], repeat: int = 1, interval: float = 1.0) -> List[
