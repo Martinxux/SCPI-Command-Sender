@@ -11,6 +11,7 @@ import socket
 import time
 
 from scpi_app.core.logger import logger
+from scpi_app.core.ezsetting import DCAConfigurator
 
 
 class SCPIError(Exception):
@@ -44,6 +45,10 @@ class SCPIInstrument:
         if self.sock:
             self.sock.close()
             self.sock = None
+
+    def is_connected(self) -> bool:
+        """检查是否已连接"""
+        return self.sock is not None
 
     def send_command(self, command, timeout=5.0):
         """
@@ -136,6 +141,54 @@ class SCPIWorker(QThread):
 class SCPIGUI(QMainWindow):
     """SCPI命令发送器的主GUI窗口"""
 
+    # 定义公共样式常量
+    STYLES = {
+        "button": """
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                padding: 5px 10px;
+                border-radius: 3px;
+                min-width: 60px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #3d8b40;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+            }
+        """,
+        "input": """
+            QLineEdit, QTextEdit, QListWidget, QComboBox, QSpinBox, QDoubleSpinBox {
+                border: 1px solid #ccc;
+                border-radius: 3px;
+                padding: 3px;
+            }
+        """,
+        "groupbox": """
+            QGroupBox {
+                border: 1px solid #ccc;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 15px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 3px;
+            }
+        """,
+        "textedit": """
+            QTextEdit {
+                font-family: 'Consolas', 'Courier New', monospace;
+            }
+        """
+    }
+
     def __init__(self):
         super().__init__()
         self.instrument_info = None
@@ -143,6 +196,7 @@ class SCPIGUI(QMainWindow):
         self.worker = None
         self.presets = {}  # 存储预设配置
         self.current_preset = None
+        self.configurator = DCAConfigurator()  # 初始化配置加载器
         
         # 设置窗口图标
         icon_path = "./ico/logo.ico"
@@ -156,59 +210,49 @@ class SCPIGUI(QMainWindow):
         self.resize(950, 970)
         self.load_default_presets()
         
+        # 自动加载配置文件
+        config_path = "config/dcasetting.ini"
+        if os.path.exists(config_path):
+            try:
+                configurations = self.configurator.load_configurations(config_path)
+                self.config_combo.clear()
+                self.config_combo.addItems(configurations.keys())
+                self.output_area.append(f"[配置] 加载成功: {config_path}")
+            except Exception as e:
+                self.output_area.append(f"[配置] 加载失败: {str(e)}")
+        else:
+            self.output_area.append(f"[配置] 配置文件未找到: {config_path}")
+        
         # 连接输出区域的自动滚动
         self.output_area.textChanged.connect(self.auto_scroll_output)
 
     def init_ui(self):
         """初始化用户界面"""
-        # 定义样式常量
-        self.STYLES = {
-            "button": """
-                QPushButton {
-                    background-color: #4CAF50;
-                    color: white;
-                    border: none;
-                    padding: 5px 10px;
-                    border-radius: 3px;
-                    min-width: 60px;
-                }
-                QPushButton:hover {
-                    background-color: #45a049;
-                }
-                QPushButton:pressed {
-                    background-color: #3d8b40;
-                }
-                QPushButton:disabled {
-                    background-color: #cccccc;
-                }
-            """,
-            "input": """
-                QLineEdit, QTextEdit, QListWidget, QComboBox, QSpinBox, QDoubleSpinBox {
-                    border: 1px solid #ccc;
-                    border-radius: 3px;
-                    padding: 3px;
-                }
-            """,
-            "groupbox": """
-                QGroupBox {
-                    border: 1px solid #ccc;
-                    border-radius: 5px;
-                    margin-top: 10px;
-                    padding-top: 15px;
-                }
-                QGroupBox::title {
-                    subcontrol-origin: margin;
-                    left: 10px;
-                    padding: 0 3px;
-                }
-            """,
-            "textedit": """
-                QTextEdit {
-                    font-family: 'Consolas', 'Courier New', monospace;
-                }
-            """
-        }
+        # 主布局
+        self.main_widget = QWidget()
+        self.setCentralWidget(self.main_widget)
+        self.main_layout = QVBoxLayout(self.main_widget)
+        self.main_layout.setContentsMargins(10, 10, 10, 10)
+        self.main_layout.setSpacing(10)
 
+        # 配置加载区域
+        self.config_group = QGroupBox("配置加载")
+        self.config_group.setStyleSheet(self.STYLES["groupbox"])
+        self.config_layout = QHBoxLayout(self.config_group)
+
+        # 配置名称下拉框
+        self.config_combo = QComboBox()
+        self.config_combo.setStyleSheet(self.STYLES["input"])
+        self.config_combo.setPlaceholderText("选择配置")
+        self.config_layout.addWidget(self.config_combo)
+
+        # 应用配置按钮
+        self.apply_config_btn = QPushButton("应用配置")
+        self.apply_config_btn.setStyleSheet(self.STYLES["button"])
+        self.apply_config_btn.clicked.connect(self.apply_configuration)
+        self.config_layout.addWidget(self.apply_config_btn)
+
+        self.main_layout.addWidget(self.config_group)
         # 设置全局样式
         self.setStyleSheet(f"""
             QWidget {{
@@ -541,8 +585,27 @@ class SCPIGUI(QMainWindow):
         
         self.setStatusBar(self.status_bar)
 
+        # 配置加载区域
+        config_group = QGroupBox("设置管理")
+        config_layout = QHBoxLayout()
+        
+        
+        # 配置名称下拉框
+        self.config_combo = QComboBox()
+        self.config_combo.setStyleSheet(self.STYLES["input"])
+        
+        # 应用配置按钮
+        self.apply_config_btn = QPushButton("应用设置")
+        self.apply_config_btn.setStyleSheet(self.STYLES["button"])
+        self.apply_config_btn.clicked.connect(self.apply_configuration)
+
+        config_layout.addWidget(self.config_combo)
+        config_layout.addWidget(self.apply_config_btn)
+        config_group.setLayout(config_layout)
+        
         main_layout.addWidget(conn_group)
         main_layout.addWidget(cmd_group)
+        main_layout.addWidget(config_group)
         main_layout.addWidget(output_group)
         main_widget.setLayout(main_layout)
         self.setCentralWidget(main_widget)
@@ -672,6 +735,22 @@ class SCPIGUI(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "错误", f"删除预设失败: {str(e)}")
                 logger.error(f"删除预设失败: {str(e)}")
+    def apply_configuration(self):
+        """应用选定的配置"""
+        if not self.instrument or not self.instrument.sock:
+            self.output_area.append("[配置] 错误: 请先连接仪器")
+            return
+            
+        config_name = self.config_combo.currentText()
+        if not config_name:
+            self.output_area.append("[配置] 错误: 请选择一个设置")
+            return
+            
+        try:
+            self.configurator.apply_configuration(self.instrument, config_name)
+            self.output_area.append(f"[配置] 应用成功: {config_name}")
+        except Exception as e:
+            self.output_area.append(f"[配置] 应用失败: {str(e)}")
 
     def save_preset_to_file(self):
         """保存当前命令序列到presets.json"""
@@ -840,25 +919,21 @@ class SCPIGUI(QMainWindow):
     def set_connection_ui(self, connected):
         """设置连接状态UI"""
         if connected:
-            self.connection_status.setText("🟢 已连接")
-            self.connection_status.setStyleSheet("""
-                QLabel {
-                    background-color: #e8f5e9;
-                    color: #2e7d32;
-                }
-            """)
-            self.connect_btn.setText("断开")
-            self.execute_btn.setEnabled(True)
+            self._update_connection_status("🟢 已连接", "#e8f5e9", "#2e7d32", "断开", True)
         else:
-            self.connection_status.setText("🔴 未连接")
-            self.connection_status.setStyleSheet("""
-                QLabel {
-                    background-color: #ffebee;
-                    color: #c62828;
-                }
-            """)
-            self.connect_btn.setText("连接")
-            self.execute_btn.setEnabled(False)
+            self._update_connection_status("🔴 未连接", "#ffebee", "#c62828", "连接", False)
+
+    def _update_connection_status(self, text, bg_color, text_color, btn_text, enable_execute):
+        """统一更新连接状态UI"""
+        self.connection_status.setText(text)
+        self.connection_status.setStyleSheet(f"""
+            QLabel {{
+                background-color: {bg_color};
+                color: {text_color};
+            }}
+        """)
+        self.connect_btn.setText(btn_text)
+        self.execute_btn.setEnabled(enable_execute)
 
     def toggle_connection(self):
         """连接/断开上位机"""
