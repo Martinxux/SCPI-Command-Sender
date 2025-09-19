@@ -222,7 +222,7 @@ class SCPIGUI(QMainWindow):
         self.port_input.setRange(1, 65535)
         self.port_input.setValue(8805)
         self.port_input.setFixedWidth(70)
-        self.port_input.setStyleSheet("padding: 3px;")
+        self.port_input.setStyleSheet(STYLES["Qspinbox"])
         port_layout.addWidget(self.port_input)
         conn_layout.addLayout(port_layout)
 
@@ -335,7 +335,7 @@ class SCPIGUI(QMainWindow):
         self.repeat_input = QSpinBox()
         self.repeat_input.setRange(1, 1000)
         self.repeat_input.setValue(1)
-        self.repeat_input.setStyleSheet("QSpinBox { padding: 3px; }")
+        self.repeat_input.setStyleSheet(STYLES["Qspinbox"])
         exec_layout.addWidget(self.repeat_input)
 
         exec_layout.addWidget(QLabel("间隔(秒):"))
@@ -343,7 +343,7 @@ class SCPIGUI(QMainWindow):
         self.interval_input.setRange(0.1, 60.0)
         self.interval_input.setValue(1.0)
         self.interval_input.setSingleStep(0.1)
-        self.interval_input.setStyleSheet("QDoubleSpinBox { padding: 3px; }")
+        self.interval_input.setStyleSheet(STYLES["Qspinbox"])
         exec_layout.addWidget(self.interval_input)
 
         exec_layout.addStretch()

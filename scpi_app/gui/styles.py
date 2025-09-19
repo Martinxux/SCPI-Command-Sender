@@ -217,5 +217,9 @@ STYLES = {
                         background-color: #ffebee;
                         color: #c62828;
                     }
-                """
+                """,
+    "Qspinbox": """
+            QDoubleSpinBox { padding: 3px; };
+            QSpinBox { padding: 3px; }
+        """
 }
