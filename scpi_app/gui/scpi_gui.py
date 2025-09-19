@@ -540,18 +540,22 @@ class SCPIGUI(QMainWindow):
         """应用选定的配置"""
         if not self.instrument or not self.instrument.sock:
             self.output_area.append("[配置] 错误: 请先连接仪器")
+            QMessageBox.warning(self, "警告", "请先连接到仪器")
             return
             
         config_name = self.config_combo.currentText()
         if not config_name:
             self.output_area.append("[配置] 错误: 请选择一个设置")
+            QMessageBox.warning(self, "警告", "请选择一个设置")
             return
             
         try:
             self.configurator.apply_configuration(self.instrument, config_name)
             self.output_area.append(f"[配置] 应用成功: {config_name}")
+            QMessageBox.information(self, "应用成功", f"配置 '{config_name}' 已应用")
         except Exception as e:
             self.output_area.append(f"[配置] 应用失败: {str(e)}")
+            QMessageBox.critical(self, "错误", f"应用配置失败: {str(e)}")
 
     def save_preset_to_file(self):
         """保存当前命令序列到presets.json"""
