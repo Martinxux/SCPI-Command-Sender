@@ -1,13 +1,19 @@
-import sys
-import json
 import os
+import sys
 import time
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-                             QLabel, QLineEdit, QTextEdit, QPushButton, QSpinBox, QDoubleSpinBox,
-                             QListWidget, QComboBox, QMessageBox, QFileDialog, QGroupBox, QInputDialog, 
-                             QStatusBar, QDialog, QProgressBar, QMenu)
+import json
+
+# PyQt5 相关导入
 from PyQt5.QtCore import QThread, pyqtSignal, Qt
 from PyQt5.QtGui import QIcon
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QLabel, QLineEdit, QTextEdit, QPushButton, QSpinBox, QDoubleSpinBox,
+    QListWidget, QComboBox, QMessageBox, QFileDialog, QGroupBox, QInputDialog,
+    QStatusBar, QDialog, QProgressBar, QMenu, QTextBrowser
+)
+
+# 本地模块导入
 from scpi_app.core.logger import logger
 from scpi_app.core.ezsetting import DCAConfigurator
 from scpi_app.core.scpi import SCPIError, SCPIInstrument
@@ -99,7 +105,7 @@ class SCPIGUI(QMainWindow):
         
         self.init_ui()
         self.setWindowTitle("SCPI Command Sender")
-        self.resize(950, 970)
+        self.resize(660, 800)
         self.load_default_presets()
         
         # 自动加载配置文件
@@ -124,11 +130,34 @@ class SCPIGUI(QMainWindow):
         
         # 帮助菜单
         help_menu = menubar.addMenu("帮助")
-        
+        # 读取说明选项
+        about_action = help_menu.addAction("ReadMe")
+        about_action.triggered.connect(self.ShowReadMe)
         # 关于选项
         about_action = help_menu.addAction("关于")
         about_action.triggered.connect(self.show_about)
-    
+
+    def ShowReadMe(self):
+        # 渲染README.md内容到窗口
+        class MarkdownViewer(QDialog):
+            def __init__(self, parent=None):
+                super().__init__(parent)
+                self.setWindowTitle("README")
+                self.setGeometry(100, 100, 800, 600)
+                layout = QVBoxLayout()
+                self.text_browser = QTextBrowser()
+                layout.addWidget(self.text_browser)
+                self.setLayout(layout)
+
+        readme_path = os.path.join(os.path.dirname(__file__), "..", "..", "README.md")
+        if os.path.exists(readme_path):
+            viewer = MarkdownViewer(self)
+            with open(readme_path, "r", encoding="utf-8") as f:
+                viewer.text_browser.setMarkdown(f.read())
+            viewer.exec_()
+        else:
+            self.show_error("未找到README.md文件")
+        
     def show_about(self):
         """显示关于对话框"""
         QMessageBox.about(self, "关于", f"SCPI Command Sender\n版本: {VERSION}")
@@ -219,8 +248,9 @@ class SCPIGUI(QMainWindow):
 
         # 配置名称下拉框
         self.config_combo = QComboBox()
-        self.config_combo.setStyleSheet(STYLES["input"])  # 设置输入框样式
-        self.config_layout.addWidget(self.config_combo)
+        self.config_layout.addWidget(QLabel("选择上位机设置以应用:"))
+        self.config_combo.setStyleSheet(STYLES["input"])
+        self.config_layout.addWidget(self.config_combo, stretch=1)
 
         # 应用配置按钮
         self.apply_config_btn = QPushButton("应用设置")
@@ -405,13 +435,13 @@ class SCPIGUI(QMainWindow):
     def update_preset_combo(self):
         """更新预设下拉框"""
         self.preset_combo.clear()
-        self.preset_combo.addItem("-- 选择预设 --")
+        self.preset_combo.addItem("---------- 选择预设 ----------")
         for preset_name in sorted(self.presets.keys()):
             self.preset_combo.addItem(preset_name)
 
     def load_preset(self, preset_name):
         """加载选中的预设"""
-        if preset_name == "-- 选择预设 --":
+        if preset_name == "---------- 选择预设 ----------":
             self.current_preset = None
             self.command_list.clear()
             self.repeat_input.setValue(1)
@@ -494,7 +524,7 @@ class SCPIGUI(QMainWindow):
                     
                     self.presets = presets["presets"]
                     self.preset_combo.clear()
-                    self.preset_combo.addItem("-- 选择预设 --")
+                    self.preset_combo.addItem("---------- 选择预设 ----------")
                     for preset_name in sorted(self.presets.keys()):
                         self.preset_combo.addItem(preset_name)
                     self.current_preset = None
