@@ -105,7 +105,7 @@ class SCPIGUI(QMainWindow):
         
         self.init_ui()
         self.setWindowTitle("SCPI Command Sender")
-        self.resize(660, 800)
+        self.resize(800, 900)
         self.load_default_presets()
         
         # 自动加载配置文件
