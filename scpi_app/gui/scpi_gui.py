@@ -421,14 +421,14 @@ class SCPIGUI(QMainWindow):
                 config = json.load(f)
                 self.presets = config.get("presets", {})
                 
-            if not self.presets:
-                raise ValueError("No presets found in config file")
+            # if not self.presets:
+            #     raise ValueError("No presets file found in config")
                 
             self.update_preset_combo()
-            self.append_output("预设配置已从文件加载")
+            self.output_area.append("[预设配置]加载成功：config/presets.json")
         except Exception as e:
-            logger.error(f"加载预设配置失败: {str(e)}")
-            QMessageBox.warning(self, "警告", f"加载预设配置失败: {str(e)}")
+            self.output_area.append(f"[预设配置]文件不存在：config/presets.json")
+            # QMessageBox.warning(self, "警告", f"加载预设配置失败: {str(e)}")
             self.presets = {}
             self.update_preset_combo()
 
