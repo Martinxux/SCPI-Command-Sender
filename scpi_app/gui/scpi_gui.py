@@ -3,10 +3,10 @@ import sys
 import time
 import json
 
-# PyQt5 相关导入
-from PyQt5.QtCore import QThread, pyqtSignal, Qt
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import (
+# PySide6 相关导入
+from PySide6.QtCore import QThread, Signal, Qt
+from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QTextEdit, QPushButton, QSpinBox, QDoubleSpinBox,
     QListWidget, QComboBox, QMessageBox, QFileDialog, QGroupBox, QInputDialog,
@@ -23,10 +23,10 @@ VERSION = "v2.1.0.20250918"
 
 class SCPIWorker(QThread):
     """用于在后台执行SCPI命令的工作线程"""
-    command_sent = pyqtSignal(str, str, int)  # 信号：命令发送、响应和循环次数
-    progress_updated = pyqtSignal(int, int)  # 信号：当前进度和总命令数
-    finished = pyqtSignal()  # 信号：任务完成
-    error_occurred = pyqtSignal(str)  # 信号：错误发生
+    command_sent = Signal(str, str, int)  # 信号：命令发送、响应和循环次数
+    progress_updated = Signal(int, int)  # 信号：当前进度和总命令数
+    finished = Signal()  # 信号：任务完成
+    error_occurred = Signal(str)  # 信号：错误发生
 
     def __init__(self, instrument, commands, repeat, interval):
         super().__init__()
@@ -154,7 +154,7 @@ class SCPIGUI(QMainWindow):
             viewer = MarkdownViewer(self)
             with open(readme_path, "r", encoding="utf-8") as f:
                 viewer.text_browser.setMarkdown(f.read())
-            viewer.exec_()
+            viewer.exec()
         else:
             self.show_error("未找到README.md文件")
         
@@ -174,7 +174,7 @@ class SCPIGUI(QMainWindow):
         # 设置全局样式
         self.setStyleSheet(f"""
             QWidget {{
-                font-family: 'Segoe UI', Arial, sans-serif;
+                font-family: 'Microsoft YaHei', '微软雅黑', sans-serif;
                 font-size: 10pt;
             }}
             {STYLES["button"]}
@@ -940,7 +940,7 @@ class SCPIGUI(QMainWindow):
         move_up_action.setEnabled(state)
         move_down_action.setEnabled(state)
         
-        menu.exec_(self.command_list.viewport().mapToGlobal(position))
+        menu.exec(self.command_list.viewport().mapToGlobal(position))
 
     def edit_command(self):
         """编辑选中的命令"""
@@ -954,7 +954,7 @@ class SCPIGUI(QMainWindow):
             dialog.setTextValue(current_text)
             dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
             
-            if dialog.exec_() == QDialog.Accepted:
+            if dialog.exec() == QDialog.Accepted:
                 new_text = dialog.textValue().strip()
                 if new_text:
                     current_item.setText(new_text)

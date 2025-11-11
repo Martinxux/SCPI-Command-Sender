@@ -1,7 +1,7 @@
 """
 通用UI组件模块
 """
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QGroupBox, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton
 )

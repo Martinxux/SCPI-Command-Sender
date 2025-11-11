@@ -61,9 +61,19 @@ STYLES = {
     """,
     "input": """
         QLineEdit, QTextEdit, QListWidget, QComboBox, QSpinBox, QDoubleSpinBox {
+            selection-background-color: #3b82f6;
             border: 1px solid #ccc;
             border-radius: 3px;
             padding: 3px;
+        }
+        
+        QLineEdit:hover, QTextEdit:hover, QListWidget:hover, QComboBox:hover {
+            border-color: #4CAF50;
+        }
+        
+        QLineEdit:focus, QTextEdit:focus, QListWidget:focus, QComboBox:focus {
+            border-color: #4CAF50;
+            border-width: 1px;
         }
     """,
     "groupbox": """
@@ -183,8 +193,9 @@ STYLES = {
                 background-color: #263238;
                 color: #ECEFF1;
                 border: 1px solid #37474F;
-                font-family: 'Consolas', 'Courier New', monospace;
+                font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Consolas', 'Courier New', monospace;
                 font-size: 10pt;
+                line-height: 1.4;
             }
         """,
     "QStatusBar": """
@@ -219,7 +230,57 @@ STYLES = {
                     }
                 """,
     "Qspinbox": """
-            QDoubleSpinBox { padding: 3px; };
-            QSpinBox { padding: 3px; }
-        """
+        QSpinBox, QDoubleSpinBox {
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            padding: 3px;
+            background-color: white;
+            min-width: 70px;
+            max-width: 100px;
+            font-family: 'Microsoft YaHei', '微软雅黑', sans-serif;
+        }
+        
+        QSpinBox:hover, QDoubleSpinBox:hover {
+            border-color: #4CAF50;
+        }
+        
+        QSpinBox:focus, QDoubleSpinBox:focus {
+            border-color: #4CAF50;
+            border-width: 1px;
+        }
+        
+        QSpinBox::up-button, QDoubleSpinBox::up-button {
+            width: 16px;
+            border-left: 1px solid #ccc;
+            background-color: #f5f5f5;
+            border-top-right-radius: 2px;
+        }
+        
+        QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover {
+            background-color: #e0e0e0;
+        }
+        
+        QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
+            image: url(scpi_app/gui/icons/arrow_up.svg);
+            width: 8px;
+            height: 8px;
+        }
+        
+        QSpinBox::down-button, QDoubleSpinBox::down-button {
+            width: 16px;
+            border-left: 1px solid #ccc;
+            background-color: #f5f5f5;
+            border-bottom-right-radius: 2px;
+        }
+        
+        QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {
+            background-color: #e0e0e0;
+        }
+        
+        QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
+            image: url(scpi_app/gui/icons/arrow_down.svg);
+            width: 8px;
+            height: 8px;
+        }
+    """
 }

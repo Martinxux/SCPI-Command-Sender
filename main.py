@@ -6,10 +6,10 @@ SCPI Command Sender 入口文件
 
 import sys
 from scpi_app.gui.scpi_gui import SCPIGUI
-from PyQt5.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = SCPIGUI()
     window.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
