@@ -6,17 +6,8 @@ SCPI Command Sender 是一个基于 PyQt5 的图形界面工具，用于通过 T
 - 命令序列发送
 - 预定义配置管理
 - 实时响应显示
-
-## 安装指南
-1. **依赖安装**：
-   ```bash
-   pip install PyQt5
-   ```
-2. **运行项目**：
-   ```bash
-   python main.py
-   ```
-
+- 自动化测试
+  
 ## 使用说明
 1. **连接仪器**：
    - 输入仪器的 IP 地址和端口号（默认端口：8805）。
@@ -86,9 +77,6 @@ commands =
   SYST:ERR?
   MEAS:VOLT?
 ```
-
-## 版本信息
-当前版本：`v2.1.0.20250918`
 
 ## 许可证
 MIT License
