@@ -123,18 +123,34 @@ STYLES = {
             }
         """,
     "SavePresetBtn": """
-            background-color: #2196F3;
-            color: white;
-            padding: 3px 8px;
-            border-radius: 4px;
-            min-width: 60px;
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                padding: 3px 8px;
+                border-radius: 4px;
+                min-width: 60px;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+            }
         """,
     "DelPresetBtn": """
-            background-color: #F44336;
-            color: white;
-            padding: 3px 8px;
-            border-radius: 4px;
-            min-width: 60px;
+            QPushButton {
+                background-color: #F44336;
+                color: white;
+                padding: 3px 8px;
+                border-radius: 4px;
+                min-width: 60px;
+            }
+            QPushButton:hover {
+                background-color: #D32F2F;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+            }
         """,
     "cmdlist": """
             QListWidget {
@@ -281,6 +297,67 @@ STYLES = {
             image: url(scpi_app/gui/icons/arrow_down.svg);
             width: 8px;
             height: 8px;
+        }
+    """,
+    "Qcombobox": """
+        QComboBox {
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            padding: 3px;
+            background-color: white;
+            min-width: 150px;
+            font-family: 'Microsoft YaHei', '微软雅黑', sans-serif;
+        }
+        
+        QComboBox:hover {
+            border-color: #4CAF50;
+        }
+        
+        QComboBox:focus {
+            border-color: #4CAF50;
+            border-width: 1px;
+        }
+        
+        QComboBox::drop-down {
+            subcontrol-origin: padding;
+            subcontrol-position: top right;
+            width: 20px;
+            border-left: 1px solid #ccc;
+            border-top-right-radius: 2px;
+            border-bottom-right-radius: 2px;
+        }
+        
+        QComboBox::down-arrow {
+            image: url(scpi_app/gui/icons/arrow_down.svg);
+            width: 8px;
+            height: 8px;
+        }
+        
+        QComboBox::down-arrow:on {
+            top: 1px;
+            left: 1px;
+        }
+        
+        QComboBox QAbstractItemView {
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            background-color: white;
+            selection-background-color: #e0f7fa;
+            outline: 0;
+        }
+        
+        QComboBox QAbstractItemView::item {
+            padding: 4px 8px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        QComboBox QAbstractItemView::item:selected {
+            background-color: #e0f7fa;
+            color: #000;
+        }
+        
+        QComboBox QAbstractItemView::item:hover {
+            background-color: #f5f5f5;
         }
     """
 }

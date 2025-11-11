@@ -249,7 +249,7 @@ class SCPIGUI(QMainWindow):
         # 配置名称下拉框
         self.config_combo = QComboBox()
         self.config_layout.addWidget(QLabel("选择上位机设置以应用:"))
-        self.config_combo.setStyleSheet(STYLES["input"])
+        self.config_combo.setStyleSheet(STYLES["Qcombobox"])
         self.config_layout.addWidget(self.config_combo, stretch=1)
 
         # 应用配置按钮
@@ -269,7 +269,7 @@ class SCPIGUI(QMainWindow):
         preset_layout.setSpacing(8)
         preset_layout.addWidget(QLabel("预设配置:"))
         self.preset_combo = QComboBox()
-        self.preset_combo.setStyleSheet("QComboBox { min-width: 150px; }")
+        self.preset_combo.setStyleSheet(STYLES["Qcombobox"])
         self.preset_combo.currentTextChanged.connect(self.load_preset)
         preset_layout.addWidget(self.preset_combo, stretch=1)
 
@@ -312,7 +312,7 @@ class SCPIGUI(QMainWindow):
         
         self.add_cmd_btn = QPushButton("➕ 添加")
         self.add_cmd_btn.setToolTip("添加当前指令到列表")
-        self.add_cmd_btn.setStyleSheet("background-color: #4CAF50;")
+        self.add_cmd_btn.setStyleSheet(STYLES["button"])
         self.add_cmd_btn.clicked.connect(self.add_command)
         
         cmd_edit_layout.addWidget(self.new_cmd_input, stretch=1)
@@ -320,7 +320,7 @@ class SCPIGUI(QMainWindow):
         
         # 添加直接发送按钮
         self.send_now_btn = QPushButton("⚡ 直接发送")
-        self.send_now_btn.setStyleSheet("background-color: #2196F3;")
+        self.send_now_btn.setStyleSheet(STYLES["SavePresetBtn"])
         self.send_now_btn.clicked.connect(self.send_single_command)
         cmd_edit_layout.addWidget(self.send_now_btn)
         
