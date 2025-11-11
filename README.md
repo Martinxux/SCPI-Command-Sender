@@ -77,6 +77,11 @@ commands =
   SYST:ERR?
   MEAS:VOLT?
 ```
-
+## TODO: 
+- 支持USB-TCP 连接
+- 连接模块放到导航栏中，GUI重新设计
+- 支持SCPI命令历史记录
+- 支持SCPI命令自动补全
+- 支持命令序列自动化测试
 ## 许可证
 MIT License
