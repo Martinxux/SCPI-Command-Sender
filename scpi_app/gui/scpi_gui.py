@@ -3,7 +3,6 @@ import sys
 import time
 import json
 
-# PySide6 相关导入
 from PySide6.QtCore import QThread, Signal, Qt
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
@@ -13,7 +12,6 @@ from PySide6.QtWidgets import (
     QStatusBar, QDialog, QProgressBar, QMenu, QTextBrowser
 )
 
-# 本地模块导入
 from scpi_app.core.logger import logger
 from scpi_app.core.ezsetting import DCAConfigurator
 from scpi_app.core.scpi import SCPIError, SCPIInstrument
@@ -105,7 +103,7 @@ class SCPIGUI(QMainWindow):
         
         self.init_ui()
         self.setWindowTitle("SCPI Command Sender")
-        self.resize(800, 900)
+        self.setGeometry(430, 30, 810, 780)
         self.load_default_presets()
         
         # 自动加载配置文件
@@ -200,19 +198,19 @@ class SCPIGUI(QMainWindow):
 
         # 主机输入
         ip_layout = QHBoxLayout()
-        ip_layout.setSpacing(2)  # 减少间距
+        ip_layout.setSpacing(2)
         ip_label = QLabel("主机 IP:")
         ip_label.setStyleSheet("padding-right: 2px;")  # 标签右内边距
         ip_layout.addWidget(ip_label)
         self.host_input = QLineEdit("127.0.0.1")
         self.host_input.setFixedWidth(100)  # 设置固定宽度
-        self.host_input.setStyleSheet("padding: 2px; margin-left: 0px;")  # 减少内边距
+        self.host_input.setStyleSheet("padding: 2px; margin-left: 0px;")
         self.host_input.setToolTip("请输入有效的IPv4地址 (例如: 192.168.1.1)")
         self.host_input.textChanged.connect(self.validate_ip_input)
         self.host_input.editingFinished.connect(self.format_ip_input)
         ip_layout.addWidget(self.host_input)
         ip_layout.addSpacing(5)  # 与下一个控件间距
-        conn_layout.addLayout(ip_layout)  # 移除stretch因子
+        conn_layout.addLayout(ip_layout)
 
         # 端口输入
         port_layout = QHBoxLayout()
@@ -243,7 +241,7 @@ class SCPIGUI(QMainWindow):
 
         # 配置加载区域
         self.config_group = QGroupBox("设置管理")
-        self.config_group.setStyleSheet(STYLES["groupbox"])  # 统一样式
+        self.config_group.setStyleSheet(STYLES["groupbox"])
         self.config_layout = QHBoxLayout(self.config_group)
 
         # 配置名称下拉框
@@ -419,16 +417,11 @@ class SCPIGUI(QMainWindow):
         try:
             with open("config/presets.json", "r", encoding='utf-8') as f:
                 config = json.load(f)
-                self.presets = config.get("presets", {})
-                
-            # if not self.presets:
-            #     raise ValueError("No presets file found in config")
-                
+                self.presets = config.get("presets", {})                
             self.update_preset_combo()
             self.output_area.append("[预设配置]加载成功：config/presets.json")
         except Exception as e:
             self.output_area.append(f"[预设配置]文件不存在：config/presets.json")
-            # QMessageBox.warning(self, "警告", f"加载预设配置失败: {str(e)}")
             self.presets = {}
             self.update_preset_combo()
 
@@ -991,4 +984,4 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = SCPIGUI()
     window.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
