@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QTextEdit, QPushButton, QSpinBox, QDoubleSpinBox,
     QListWidget, QComboBox, QMessageBox, QFileDialog, QGroupBox, QInputDialog,
-    QStatusBar, QDialog, QProgressBar, QMenu, QTextBrowser
+    QStatusBar, QDialog, QProgressBar, QMenu, QTextBrowser, QDialogButtonBox
 )
 
 from scpi_app.core.logger import logger
@@ -80,6 +80,107 @@ class SCPIWorker(QThread):
             self.error_occurred.emit(f"意外错误: {str(e)}")
 
 
+class ConnectionDialog(QDialog):
+    """连接配置对话框"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("连接配置")
+        self.setModal(True)
+        self.setFixedSize(400, 200)
+        
+        # 创建布局
+        layout = QVBoxLayout()
+        
+        # 主机IP设置
+        ip_layout = QHBoxLayout()
+        ip_layout.addWidget(QLabel("主机 IP:"))
+        self.host_input = QLineEdit("127.0.0.1")
+        self.host_input.setFixedWidth(120)
+        self.host_input.textChanged.connect(self.validate_ip_input)
+        self.host_input.editingFinished.connect(self.format_ip_input)
+        ip_layout.addWidget(self.host_input)
+        ip_layout.addStretch()
+        layout.addLayout(ip_layout)
+        
+        # 端口设置
+        port_layout = QHBoxLayout()
+        port_layout.addWidget(QLabel("端口:"))
+        self.port_input = QSpinBox()
+        self.port_input.setStyleSheet(STYLES["Qspinbox"])
+        self.port_input.setRange(1, 65535)
+        self.port_input.setValue(8805)
+        self.port_input.setFixedWidth(80)
+        port_layout.addWidget(self.port_input)
+        port_layout.addStretch()
+        layout.addLayout(port_layout)
+        
+        # 按钮
+        button_layout = QHBoxLayout()
+        self.connect_btn = QPushButton("连接")
+        self.connect_btn.clicked.connect(self.accept)
+        self.cancel_btn = QPushButton("取消")
+        self.cancel_btn.clicked.connect(self.reject)
+        button_layout.addWidget(self.connect_btn)
+        button_layout.addWidget(self.cancel_btn)
+        layout.addLayout(button_layout)
+        
+        self.setLayout(layout)
+    
+    def validate_ip_input(self, text):
+        """实时验证IP地址输入"""
+        if not text or text.count('.') > 3:
+            self.host_input.setStyleSheet("background-color: #FFD6D6;")
+            return
+            
+        parts = text.split('.')
+        valid = True
+        for part in parts:
+            if not part.isdigit() or (part and int(part) > 255):
+                valid = False
+                break
+                
+        if valid:
+            self.host_input.setStyleSheet("")
+        else:
+            self.host_input.setStyleSheet("background-color: #FFD6D6;")
+    
+    def format_ip_input(self):
+        """自动格式化IP地址输入"""
+        text = self.host_input.text()
+        parts = []
+        current = ''
+        
+        # 提取数字部分
+        for char in text:
+            if char.isdigit():
+                current += char
+            elif char == '.' and current:
+                parts.append(current)
+                current = ''
+        if current:
+            parts.append(current)
+            
+        # 限制最多4部分，每部分最多3位
+        parts = parts[:4]
+        formatted = []
+        for part in parts:
+            if part:
+                formatted.append(part[:3])
+            else:
+                formatted.append('0')
+                
+        # 补全为4部分
+        while len(formatted) < 4:
+            formatted.append('0')
+            
+        # 组合为标准IP格式
+        self.host_input.setText('.'.join(formatted[:4]))
+    
+    def get_connection_info(self):
+        """获取连接信息"""
+        return self.host_input.text(), self.port_input.value()
+
+
 class SCPIGUI(QMainWindow):
     """SCPI命令发送器的主GUI窗口"""
     def __init__(self):
@@ -103,7 +204,7 @@ class SCPIGUI(QMainWindow):
         
         self.init_ui()
         self.setWindowTitle("SCPI Command Sender")
-        self.setGeometry(430, 30, 810, 780)
+        self.setGeometry(430, 30, 810, 700)  # 减小高度，因为移除了连接区域
         self.load_default_presets()
         
         # 自动加载配置文件
@@ -125,6 +226,11 @@ class SCPIGUI(QMainWindow):
     def init_menu_bar(self):
         """初始化菜单栏"""
         menubar = self.menuBar()
+        
+        # 连接菜单
+        self.connection_menu = menubar.addMenu("连接")
+        self.connect_action = self.connection_menu.addAction("连接配置")
+        self.connect_action.triggered.connect(self.toggle_connection)
         
         # 帮助菜单
         help_menu = menubar.addMenu("帮助")
@@ -189,55 +295,25 @@ class SCPIGUI(QMainWindow):
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(10)
 
-        # 连接设置区域
-        conn_group = QGroupBox("上位机连接")
-        conn_group.setStyleSheet(STYLES["hostconnect"])  # 统一样式
-        conn_layout = QHBoxLayout()
-        conn_layout.setSpacing(10)
-        conn_layout.setContentsMargins(5, 5, 5, 5)
-
-        # 主机输入
-        ip_layout = QHBoxLayout()
-        ip_layout.setSpacing(2)
-        ip_label = QLabel("主机 IP:")
-        ip_label.setStyleSheet("padding-right: 2px;")  # 标签右内边距
-        ip_layout.addWidget(ip_label)
-        self.host_input = QLineEdit("127.0.0.1")
-        self.host_input.setFixedWidth(100)  # 设置固定宽度
-        self.host_input.setStyleSheet("padding: 2px; margin-left: 0px;")
-        self.host_input.setToolTip("请输入有效的IPv4地址 (例如: 192.168.1.1)")
-        self.host_input.textChanged.connect(self.validate_ip_input)
-        self.host_input.editingFinished.connect(self.format_ip_input)
-        ip_layout.addWidget(self.host_input)
-        ip_layout.addSpacing(5)  # 与下一个控件间距
-        conn_layout.addLayout(ip_layout)
-
-        # 端口输入
-        port_layout = QHBoxLayout()
-        port_layout.setSpacing(5)
-        port_layout.addWidget(QLabel("端口:"))
-        self.port_input = QSpinBox()
-        self.port_input.setRange(1, 65535)
-        self.port_input.setValue(8805)
-        self.port_input.setFixedWidth(70)
-        self.port_input.setStyleSheet(STYLES["Qspinbox"])
-        port_layout.addWidget(self.port_input)
-        conn_layout.addLayout(port_layout)
-
-        # 连接按钮
-        self.connect_btn = QPushButton("连接")
-        self.connect_btn.setFixedWidth(80)
-        self.connect_btn.setStyleSheet(STYLES["connectbtn"])
-        self.connect_btn.clicked.connect(self.toggle_connection)
-        conn_layout.addWidget(self.connect_btn)
+        # 连接状态显示区域
+        conn_status_group = QGroupBox("连接状态")
+        conn_status_group.setStyleSheet(STYLES["hostconnect"])  # 统一样式
+        conn_status_layout = QHBoxLayout()
+        conn_status_layout.setSpacing(10)
+        conn_status_layout.setContentsMargins(5, 5, 5, 5)
 
         # 上位机信息显示
-        self.instrument_info = QLabel("未获取")
+        self.instrument_info = QLabel("未连接")
         self.instrument_info.setStyleSheet(STYLES["Label_not_acquired"])
         self.instrument_info.setToolTip("仪器标识信息")
-        conn_layout.addWidget(self.instrument_info, stretch=1)  # 设置stretch因子使其可以缩放
-        # 将连接设置区域添加到主布局
-        conn_group.setLayout(conn_layout)
+        conn_status_layout.addWidget(self.instrument_info, stretch=1)
+        
+        # 连接状态指示器
+        self.connection_status = QLabel("🔴 未连接")
+        self.connection_status.setStyleSheet(STYLES["QLabel_noconnect"])
+        conn_status_layout.addWidget(self.connection_status)
+        
+        conn_status_group.setLayout(conn_status_layout)
 
         # 配置加载区域
         self.config_group = QGroupBox("设置管理")
@@ -395,11 +471,6 @@ class SCPIGUI(QMainWindow):
         self.version_label.setStyleSheet("color: #666; font-size: 9pt;")
         self.status_bar.addPermanentWidget(self.version_label)
         
-        # 连接状态指示器
-        self.connection_status = QLabel("🔴 未连接")
-        self.connection_status.setStyleSheet(STYLES["QLabel_noconnect"])
-        self.status_bar.addPermanentWidget(self.connection_status)
-        
         # 执行状态指示器
         self.execution_status = QLabel("🟡 空闲")
         self.execution_status.setStyleSheet(STYLES["QLabel_idle"])
@@ -407,10 +478,10 @@ class SCPIGUI(QMainWindow):
         
         self.setStatusBar(self.status_bar)
         # 主布局顺序
-        self.main_layout.addWidget(conn_group)      # 上位机连接
-        self.main_layout.addWidget(self.config_group)   # 配置管理
-        self.main_layout.addWidget(cmd_group)       # 命令设置
-        self.main_layout.addWidget(output_group)    # 输出区域
+        self.main_layout.addWidget(conn_status_group)  # 连接状态
+        self.main_layout.addWidget(self.config_group)  # 配置管理
+        self.main_layout.addWidget(cmd_group)          # 命令设置
+        self.main_layout.addWidget(output_group)       # 输出区域
 
     def load_default_presets(self):
         """从配置文件加载预设"""
@@ -717,11 +788,11 @@ class SCPIGUI(QMainWindow):
     def set_connection_ui(self, connected):
         """设置连接状态UI"""
         if connected:
-            self._update_connection_status("🟢 已连接", "#e8f5e9", "#2e7d32", "断开", True)
+            self._update_connection_status("🟢 已连接", "#e8f5e9", "#2e7d32", True)
         else:
-            self._update_connection_status("🔴 未连接", "#ffebee", "#c62828", "连接", False)
+            self._update_connection_status("🔴 未连接", "#ffebee", "#c62828", False)
 
-    def _update_connection_status(self, text, bg_color, text_color, btn_text, enable_execute):
+    def _update_connection_status(self, text, bg_color, text_color, enable_execute):
         """统一更新连接状态UI"""
         self.connection_status.setText(text)
         self.connection_status.setStyleSheet(f"""
@@ -730,7 +801,6 @@ class SCPIGUI(QMainWindow):
                 color: {text_color};
             }}
         """)
-        self.connect_btn.setText(btn_text)
         self.execute_btn.setEnabled(enable_execute)
 
     def toggle_connection(self):
@@ -793,7 +863,6 @@ class SCPIGUI(QMainWindow):
                     self.instrument = None
                 self.connection_status.setText("🔴 未连接")
                 self.connection_status.setStyleSheet(STYLES["disconnect_status"])
-                self.connect_btn.setText("连接")
                 self.execute_btn.setEnabled(False)
                 self.instrument_info.setText("连接失败")
                 self.append_output(f"连接失败: {str(e)}")
@@ -818,7 +887,6 @@ class SCPIGUI(QMainWindow):
         # 更新UI状态
         self.execute_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
-        self.connect_btn.setEnabled(False)
         self.set_execution_state('executing')
         self.append_output(f"开始执行 {len(commands)} 条命令，重复 {repeat} 次...")
 
@@ -873,7 +941,6 @@ class SCPIGUI(QMainWindow):
         self.append_output("命令执行完成")
         self.execute_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
-        self.connect_btn.setEnabled(True)
         self.set_execution_state('completed')
         self.progress_bar.setValue(100)
         self.worker = None
@@ -884,7 +951,6 @@ class SCPIGUI(QMainWindow):
         self.append_output(f"错误: {error_msg}", "ERROR")
         self.execute_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
-        self.connect_btn.setEnabled(True)
         self.set_execution_state('error')
         self.progress_bar.setValue(0)
         self.worker = None
@@ -979,6 +1045,100 @@ class SCPIGUI(QMainWindow):
             logger.warning(message)
         else:
             logger.info(message)
+
+    def show_connection_dialog(self):
+        """显示连接配置对话框"""
+        dialog = ConnectionDialog(self)
+        if dialog.exec() == QDialog.Accepted:
+            host, port = dialog.get_connection_info()
+            self.connect_to_instrument(host, port)
+    
+    def connect_to_instrument(self, host, port):
+        """连接到仪器"""
+        if not self.is_valid_ip(host):
+            QMessageBox.warning(self, "IP地址错误", 
+                              "请输入有效的IPv4地址 (格式: xxx.xxx.xxx.xxx)")
+            return
+            
+        try:
+            self.instrument = SCPIInstrument(host, port)
+            self.instrument.connect()
+            
+            # 获取仪器信息
+            try:
+                idn = self.instrument.send_command("*IDN?")
+                if idn:
+                    parts = [p.strip() for p in idn.split(',')]
+                    # 确保至少有3个部分，不足的用空字符串填充
+                    while len(parts) < 3:
+                        parts.append('')
+                    # 显示制造商、型号和序列号
+                    short_id = f"{parts[0]} {parts[1]} (SN:{parts[2]})" if parts[2] else f"{parts[0]} {parts[1]}"
+                    self.instrument_info.setText(short_id)
+                    self.instrument_info.setToolTip(idn)
+                else:
+                    self.instrument_info.setText("无响应")
+                    self.append_output("仪器未返回标识信息", "WARNING")
+            except Exception as e:
+                self.instrument_info.setText("获取失败")
+                self.append_output(f"获取仪器信息错误: {str(e)}", "ERROR")
+                logger.error(f"获取仪器信息失败: {str(e)}")
+            
+            self.set_connection_ui(True)
+            self.update_connection_menu(True)
+            self.append_output(f"已连接到 {host}:{port}")
+            if 'idn' in locals() and idn:
+                self.append_output(f"仪器标识: {idn}")
+        except SCPIError as e:
+            logger.error(f"连接失败: {str(e)}")
+            QMessageBox.critical(self, "连接错误", str(e))
+            if self.instrument:
+                try:
+                    self.instrument.disconnect()
+                except:
+                    pass
+                self.instrument = None
+            self.set_connection_ui(False)
+            self.instrument_info.setText("连接失败")
+            self.append_output(f"连接失败: {str(e)}")
+    
+    def toggle_connection(self):
+        """切换连接状态"""
+        if self.is_connected():
+            self.disconnect_instrument()
+        else:
+            self.show_connection_dialog()
+    
+    def disconnect_instrument(self):
+        """断开仪器连接"""
+        if not self.is_connected():
+            QMessageBox.information(self, "信息", "当前未连接到仪器")
+            return
+            
+        try:
+            self.instrument.disconnect()
+            self.set_connection_ui(False)
+            self.update_connection_menu(False)
+            self.instrument_info.setText("未连接")
+            self.append_output("已断开上位机连接")
+            self.execution_status.setText("🟡 空闲")
+            self.instrument = None
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"断开连接错误: {str(e)}")
+    
+    def update_connection_menu(self, connected):
+        """更新连接菜单状态"""
+        # 清除菜单项
+        self.connection_menu.clear()
+        
+        if connected:
+            # 已连接状态：显示断开连接选项
+            self.connect_action = self.connection_menu.addAction("断开连接")
+            self.connect_action.triggered.connect(self.toggle_connection)
+        else:
+            # 未连接状态：显示连接配置选项
+            self.connect_action = self.connection_menu.addAction("连接配置")
+            self.connect_action.triggered.connect(self.toggle_connection)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
