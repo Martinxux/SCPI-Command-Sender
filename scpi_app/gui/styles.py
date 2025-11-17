@@ -223,28 +223,16 @@ STYLES = {
         """,
     "QLabel_noconnect": """
             QLabel {
-                padding: 2px 8px;
-                border-radius: 3px;
                 background-color: #ffebee;
                 color: #c62828;
-                font-weight: bold;
             }
         """,
     "QLabel_idle": """
             QLabel {
-                padding: 2px 8px;
-                border-radius: 3px;
                 background-color: #fff8e1;
                 color: #ff8f00;
-                font-weight: bold;
             }
         """,
-    "disconnect_status": """
-                    QLabel {
-                        background-color: #ffebee;
-                        color: #c62828;
-                    }
-                """,
     "Qspinbox": """
         QSpinBox, QDoubleSpinBox {
             border: 1px solid #ccc;
