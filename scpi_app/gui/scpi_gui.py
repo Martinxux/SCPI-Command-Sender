@@ -37,6 +37,10 @@ class SCPIWorker(QThread):
     def stop(self):
         """请求停止执行"""
         self._is_running = False
+        # 请求线程终止
+        self.quit()
+        # 等待线程安全退出（最多等待2秒）
+        self.wait(2000)
 
     def run(self):
         """
@@ -55,11 +59,12 @@ class SCPIWorker(QThread):
                 loop_num = loop + 1  # 循环次数从1开始计数
                 for cmd in self.commands:
                     if not self._is_running:
-                        self.finished.emit()
-                        return
+                        return  # 直接返回，不发送finished信号
                         
                     try:
-                        response = self.instrument.send_command(cmd)
+                        # 为*OPC?命令设置更长的超时时间
+                        timeout = 30.0 if cmd.strip() == "*OPC?" else 5.0
+                        response = self.instrument.send_command(cmd, timeout)
                         if cmd.endswith('?'):
                             self.command_sent.emit(cmd, str(response) if response else "No response", loop_num)
                         else:
@@ -69,13 +74,25 @@ class SCPIWorker(QThread):
 
                         # 等待间隔(最后一次循环的最后一个命令后不等待)
                         if not (loop == self.repeat - 1 and cmd == self.commands[-1]):
-                            time.sleep(self.interval)
+                            # 分段等待，以便能够响应停止请求
+                            wait_time = self.interval
+                            while wait_time > 0 and self._is_running:
+                                # 每次等待0.1秒，以便快速响应停止请求
+                                sleep_time = min(0.1, wait_time)
+                                time.sleep(sleep_time)
+                                wait_time -= sleep_time
 
                     except SCPIError as e:
                         self.error_occurred.emit(str(e))
                         return
 
-            self.finished.emit()
+            # 只有在正常完成所有命令时才发送finished信号
+            # 再次检查_is_running状态，确保用户没有在最后时刻停止执行
+            if self._is_running:
+                self.finished.emit()
+            else:
+                # 如果用户停止了执行，不发送finished信号
+                return
         except Exception as e:
             self.error_occurred.emit(f"意外错误: {str(e)}")
 
@@ -599,7 +616,7 @@ class SCPIGUI(QMainWindow):
                     
             except Exception as e:
                 QMessageBox.critical(self, "错误", f"删除预设失败: {str(e)}")
-                logger.error(f"删除预设失败: {str(e)}")
+                self.append_output(f"删除预设失败: {str(e)}", "ERROR")
     def apply_configuration(self):
         """应用选定的配置"""
         if not self.instrument or not self.instrument.sock:
@@ -664,7 +681,7 @@ class SCPIGUI(QMainWindow):
             
         except Exception as e:
             QMessageBox.critical(self, "错误", f"保存预设失败: {str(e)}")
-            logger.error(f"保存预设失败: {str(e)}")
+            self.append_output(f"保存预设失败: {str(e)}", "ERROR")
 
     def add_command(self):
         """添加新命令到列表"""
@@ -803,70 +820,6 @@ class SCPIGUI(QMainWindow):
         """)
         self.execute_btn.setEnabled(enable_execute)
 
-    def toggle_connection(self):
-        """连接/断开上位机"""
-        idn = None  # 初始化idn变量
-        if self.is_connected():
-            try:
-                self.instrument.disconnect()
-                self.set_connection_ui(False)
-                self.instrument_info.setText("未获取")
-                self.append_output("已断开上位机连接")
-                self.execution_status.setText("🟡 空闲")
-                self.instrument = None
-            except Exception as e:
-                QMessageBox.critical(self, "错误", f"断开连接错误: {str(e)}")
-        else:
-            host = self.host_input.text()
-            if not self.is_valid_ip(host):
-                QMessageBox.warning(self, "IP地址错误", 
-                                  "请输入有效的IPv4地址 (格式: xxx.xxx.xxx.xxx)")
-                return
-                
-            try:
-                port = self.port_input.value()
-                self.instrument = SCPIInstrument(host, port)
-                self.instrument.connect()
-                
-                # 获取仪器信息
-                try:
-                    idn = self.instrument.send_command("*IDN?")
-                    if idn:
-                        parts = [p.strip() for p in idn.split(',')]
-                        # 确保至少有3个部分，不足的用空字符串填充
-                        while len(parts) < 3:
-                            parts.append('')
-                        # 显示制造商、型号和序列号
-                        short_id = f"{parts[0]} {parts[1]} (SN:{parts[2]})" if parts[2] else f"{parts[0]} {parts[1]}"
-                        self.instrument_info.setText(short_id)
-                        self.instrument_info.setToolTip(idn)
-                    else:
-                        self.instrument_info.setText("无响应")
-                        self.append_output("仪器未返回标识信息", "WARNING")
-                except Exception as e:
-                    self.instrument_info.setText("获取失败")
-                    self.append_output(f"获取仪器信息错误: {str(e)}", "ERROR")
-                    logger.error(f"获取仪器信息失败: {str(e)}")
-                
-                self.set_connection_ui(True)
-                self.append_output(f"已连接到 {host}:{port}")
-                if idn:
-                    self.append_output(f"仪器标识: {idn}")
-            except SCPIError as e:
-                logger.error(f"连接失败: {str(e)}")  # 新增日志记录
-                QMessageBox.critical(self, "连接错误", str(e))
-                if self.instrument:
-                    try:
-                        self.instrument.disconnect()
-                    except:
-                        pass
-                    self.instrument = None
-                self.connection_status.setText("🔴 未连接")
-                self.connection_status.setStyleSheet(STYLES["disconnect_status"])
-                self.execute_btn.setEnabled(False)
-                self.instrument_info.setText("连接失败")
-                self.append_output(f"连接失败: {str(e)}")
-
     def execute_commands(self):
         """执行命令序列"""
         if not self.instrument or not self.instrument.sock:
@@ -890,6 +843,16 @@ class SCPIGUI(QMainWindow):
         self.set_execution_state('executing')
         self.append_output(f"开始执行 {len(commands)} 条命令，重复 {repeat} 次...")
 
+        # 如果存在之前的worker，先断开所有信号连接
+        if self.worker:
+            try:
+                self.worker.command_sent.disconnect()
+                self.worker.progress_updated.disconnect()
+                self.worker.finished.disconnect()
+                self.worker.error_occurred.disconnect()
+            except:
+                pass  # 忽略断开连接时的错误
+        
         # 创建工作线程
         self.worker = SCPIWorker(self.instrument, commands, repeat, interval)
         self.worker.command_sent.connect(self.handle_command_result)
@@ -924,8 +887,12 @@ class SCPIGUI(QMainWindow):
         """停止当前执行"""
         if self.worker:
             self.worker.stop()
-            self.append_output("正在停止执行...")
+            self.append_output("用户手动停止执行...")
+            self.execute_btn.setEnabled(True)
             self.stop_btn.setEnabled(False)
+            self.set_execution_state('idle')
+            self.progress_bar.setValue(0)
+            self.worker = None
 
     def set_execution_state(self, state):
         """设置执行状态UI
@@ -947,7 +914,6 @@ class SCPIGUI(QMainWindow):
 
     def handle_execution_error(self, error_msg):
         """处理执行错误"""
-        logger.error(f"执行错误: {error_msg}")
         self.append_output(f"错误: {error_msg}", "ERROR")
         self.execute_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
@@ -1082,7 +1048,6 @@ class SCPIGUI(QMainWindow):
             except Exception as e:
                 self.instrument_info.setText("获取失败")
                 self.append_output(f"获取仪器信息错误: {str(e)}", "ERROR")
-                logger.error(f"获取仪器信息失败: {str(e)}")
             
             self.set_connection_ui(True)
             self.update_connection_menu(True)
@@ -1090,7 +1055,7 @@ class SCPIGUI(QMainWindow):
             if 'idn' in locals() and idn:
                 self.append_output(f"仪器标识: {idn}")
         except SCPIError as e:
-            logger.error(f"连接失败: {str(e)}")
+            self.append_output(f"连接失败: {str(e)}", "ERROR")
             QMessageBox.critical(self, "连接错误", str(e))
             if self.instrument:
                 try:
@@ -1100,7 +1065,7 @@ class SCPIGUI(QMainWindow):
                 self.instrument = None
             self.set_connection_ui(False)
             self.instrument_info.setText("连接失败")
-            self.append_output(f"连接失败: {str(e)}")
+
     
     def toggle_connection(self):
         """切换连接状态"""
