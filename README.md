@@ -1,7 +1,7 @@
 # SCPI Command Sender
 
 ## 项目概述
-SCPI Command Sender 是一个基于 PyQt5 的图形界面工具，用于通过 TCP/IP 连接发送 SCPI 命令到测试仪器。它支持以下功能：
+SCPI Command Sender 是一个基于 Pyside6 的图形界面工具，用于通过 TCP/IP 连接发送 SCPI 命令到测试仪器。它支持以下功能：
 - 单条命令发送
 - 命令序列发送
 - 预定义配置管理
