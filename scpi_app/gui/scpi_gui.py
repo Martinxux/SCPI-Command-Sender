@@ -14,7 +14,8 @@ from PySide6.QtWidgets import (
 
 from scpi_app.core.logger import logger
 from scpi_app.core.ezsetting import DCAConfigurator
-from scpi_app.core.scpi import SCPIError, SCPIInstrument
+from scpi_app.core.scpi import SCPIError
+from .connection_dialog import ConnectionDialog
 from .styles import STYLES, execution_state_STYLES
 
 VERSION = "v2.1.0.20250918"
@@ -97,105 +98,7 @@ class SCPIWorker(QThread):
             self.error_occurred.emit(f"意外错误: {str(e)}")
 
 
-class ConnectionDialog(QDialog):
-    """连接配置对话框"""
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("连接配置")
-        self.setModal(True)
-        self.setFixedSize(400, 200)
-        
-        # 创建布局
-        layout = QVBoxLayout()
-        
-        # 主机IP设置
-        ip_layout = QHBoxLayout()
-        ip_layout.addWidget(QLabel("主机 IP:"))
-        self.host_input = QLineEdit("127.0.0.1")
-        self.host_input.setFixedWidth(120)
-        self.host_input.textChanged.connect(self.validate_ip_input)
-        self.host_input.editingFinished.connect(self.format_ip_input)
-        ip_layout.addWidget(self.host_input)
-        ip_layout.addStretch()
-        layout.addLayout(ip_layout)
-        
-        # 端口设置
-        port_layout = QHBoxLayout()
-        port_layout.addWidget(QLabel("端口:"))
-        self.port_input = QSpinBox()
-        self.port_input.setStyleSheet(STYLES["Qspinbox"])
-        self.port_input.setRange(1, 65535)
-        self.port_input.setValue(8805)
-        self.port_input.setFixedWidth(80)
-        port_layout.addWidget(self.port_input)
-        port_layout.addStretch()
-        layout.addLayout(port_layout)
-        
-        # 按钮
-        button_layout = QHBoxLayout()
-        self.connect_btn = QPushButton("连接")
-        self.connect_btn.clicked.connect(self.accept)
-        self.cancel_btn = QPushButton("取消")
-        self.cancel_btn.clicked.connect(self.reject)
-        button_layout.addWidget(self.connect_btn)
-        button_layout.addWidget(self.cancel_btn)
-        layout.addLayout(button_layout)
-        
-        self.setLayout(layout)
-    
-    def validate_ip_input(self, text):
-        """实时验证IP地址输入"""
-        if not text or text.count('.') > 3:
-            self.host_input.setStyleSheet("background-color: #FFD6D6;")
-            return
-            
-        parts = text.split('.')
-        valid = True
-        for part in parts:
-            if not part.isdigit() or (part and int(part) > 255):
-                valid = False
-                break
-                
-        if valid:
-            self.host_input.setStyleSheet("")
-        else:
-            self.host_input.setStyleSheet("background-color: #FFD6D6;")
-    
-    def format_ip_input(self):
-        """自动格式化IP地址输入"""
-        text = self.host_input.text()
-        parts = []
-        current = ''
-        
-        # 提取数字部分
-        for char in text:
-            if char.isdigit():
-                current += char
-            elif char == '.' and current:
-                parts.append(current)
-                current = ''
-        if current:
-            parts.append(current)
-            
-        # 限制最多4部分，每部分最多3位
-        parts = parts[:4]
-        formatted = []
-        for part in parts:
-            if part:
-                formatted.append(part[:3])
-            else:
-                formatted.append('0')
-                
-        # 补全为4部分
-        while len(formatted) < 4:
-            formatted.append('0')
-            
-        # 组合为标准IP格式
-        self.host_input.setText('.'.join(formatted[:4]))
-    
-    def get_connection_info(self):
-        """获取连接信息"""
-        return self.host_input.text(), self.port_input.value()
+
 
 
 class SCPIGUI(QMainWindow):
@@ -1016,18 +919,18 @@ class SCPIGUI(QMainWindow):
         """显示连接配置对话框"""
         dialog = ConnectionDialog(self)
         if dialog.exec() == QDialog.Accepted:
-            host, port = dialog.get_connection_info()
-            self.connect_to_instrument(host, port)
+            connection_info = dialog.get_connection_info()
+            if connection_info:
+                self.connect_to_instrument(connection_info)
     
-    def connect_to_instrument(self, host, port):
+    def connect_to_instrument(self, connection_info):
         """连接到仪器"""
-        if not self.is_valid_ip(host):
-            QMessageBox.warning(self, "IP地址错误", 
-                              "请输入有效的IPv4地址 (格式: xxx.xxx.xxx.xxx)")
-            return
-            
         try:
-            self.instrument = SCPIInstrument(host, port)
+            # 使用工厂模式创建仪器实例
+            self.instrument = SCPIInstrumentFactory.create_instrument(
+                connection_info['protocol'],
+                **{k: v for k, v in connection_info.items() if k != 'protocol'}
+            )
             self.instrument.connect()
             
             # 获取仪器信息
@@ -1049,9 +952,15 @@ class SCPIGUI(QMainWindow):
                 self.instrument_info.setText("获取失败")
                 self.append_output(f"获取仪器信息错误: {str(e)}", "ERROR")
             
+            # 显示连接信息
+            if connection_info['protocol'] == 'TCP/IP':
+                connection_str = f"{connection_info['host']}:{connection_info['port']}"
+            else:
+                connection_str = connection_info['address']
+            
             self.set_connection_ui(True)
             self.update_connection_menu(True)
-            self.append_output(f"已连接到 {host}:{port}")
+            self.append_output(f"已通过 {connection_info['protocol']} 连接到 {connection_str}")
             if 'idn' in locals() and idn:
                 self.append_output(f"仪器标识: {idn}")
         except SCPIError as e:
@@ -1085,7 +994,7 @@ class SCPIGUI(QMainWindow):
             self.set_connection_ui(False)
             self.update_connection_menu(False)
             self.instrument_info.setText("未连接")
-            self.append_output("已断开上位机连接")
+            self.append_output("已断开仪器连接")
             self.execution_status.setText("🟡 空闲")
             self.instrument = None
         except Exception as e:
