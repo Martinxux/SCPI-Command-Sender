@@ -1012,7 +1012,7 @@ class SCPIGUI(QMainWindow):
                 if not address:
                     QMessageBox.warning(self, "警告", "VISA地址不能为空")
                     return
-                
+
                 self.instrument = SCPIInstrument(visa_address=address)
                 self.instrument.connect()
 
