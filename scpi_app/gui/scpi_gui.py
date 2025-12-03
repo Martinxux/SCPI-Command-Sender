@@ -2,26 +2,47 @@ import os
 import sys
 import time
 import json
+from typing import Optional, Dict, Any
 
 from PySide6.QtCore import QThread, Signal, Qt
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QTextEdit, QPushButton, QSpinBox, QDoubleSpinBox,
-    QListWidget, QComboBox, QMessageBox, QFileDialog, QGroupBox, QInputDialog,
-    QStatusBar, QDialog, QProgressBar, QMenu, QTextBrowser, QDialogButtonBox
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QTextEdit,
+    QPushButton,
+    QSpinBox,
+    QDoubleSpinBox,
+    QListWidget,
+    QComboBox,
+    QMessageBox,
+    QFileDialog,
+    QGroupBox,
+    QInputDialog,
+    QStatusBar,
+    QDialog,
+    QProgressBar,
+    QMenu,
+    QTextBrowser,
 )
 
-from scpi_app.core.logger import logger
+from scpi_app.logger import logger
 from scpi_app.core.ezsetting import DCAConfigurator
-from scpi_app.core.scpi import SCPIError
-from .connection_dialog import ConnectionDialog
+from scpi_app.core.scpi import SCPIError, SCPIInstrument
+from .dialogs import ConnectionDialog
 from .styles import STYLES, execution_state_STYLES
 
 VERSION = "v2.1.0.20250918"
 
+
 class SCPIWorker(QThread):
     """用于在后台执行SCPI命令的工作线程"""
+
     command_sent = Signal(str, str, int)  # 信号：命令发送、响应和循环次数
     progress_updated = Signal(int, int)  # 信号：当前进度和总命令数
     finished = Signal()  # 信号：任务完成
@@ -46,28 +67,32 @@ class SCPIWorker(QThread):
     def run(self):
         """
         线程执行的主方法
-        
+
         注意: 此方法运行在独立线程中，所有GUI操作必须通过信号槽完成
         """
         try:
             if not self._is_running:
                 return
-                
+
             total_commands = len(self.commands) * self.repeat
             commands_executed = 0
-            
+
             for loop in range(self.repeat):
                 loop_num = loop + 1  # 循环次数从1开始计数
                 for cmd in self.commands:
                     if not self._is_running:
                         return  # 直接返回，不发送finished信号
-                        
+
                     try:
                         # 为*OPC?命令设置更长的超时时间
                         timeout = 30.0 if cmd.strip() == "*OPC?" else 5.0
                         response = self.instrument.send_command(cmd, timeout)
-                        if cmd.endswith('?'):
-                            self.command_sent.emit(cmd, str(response) if response else "No response", loop_num)
+                        if cmd.endswith("?"):
+                            self.command_sent.emit(
+                                cmd,
+                                str(response) if response else "No response",
+                                loop_num,
+                            )
                         else:
                             self.command_sent.emit(cmd, "", loop_num)
                         commands_executed += 1
@@ -98,35 +123,33 @@ class SCPIWorker(QThread):
             self.error_occurred.emit(f"意外错误: {str(e)}")
 
 
-
-
-
 class SCPIGUI(QMainWindow):
     """SCPI命令发送器的主GUI窗口"""
+
     def __init__(self):
         super().__init__()
-        self.instrument_info = None
-        self.instrument = None
-        self.worker = None
-        self.presets = {}  # 存储预设配置
-        self.current_preset = None
+        self.instrument_info: Optional[QLabel] = None
+        self.instrument: Optional[SCPIInstrument] = None
+        self.worker: Optional[SCPIWorker] = None
+        self.presets: Dict[str, Dict[str, Any]] = {}  # 存储预设配置
+        self.current_preset: Optional[str] = None
         self.configurator = DCAConfigurator()  # 初始化配置加载器
-        
+
         # 设置窗口图标
         icon_path = "./ico/logo.ico"
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
         else:
             logger.warning(f"图标文件未找到: {icon_path}")
-            
+
         # 初始化菜单栏
         self.init_menu_bar()
-        
+
         self.init_ui()
         self.setWindowTitle("SCPI Command Sender")
         self.setGeometry(430, 30, 810, 700)  # 减小高度，因为移除了连接区域
         self.load_default_presets()
-        
+
         # 自动加载配置文件
         config_path = "config/dcasetting.ini"
         if os.path.exists(config_path):
@@ -139,29 +162,29 @@ class SCPIGUI(QMainWindow):
                 self.output_area.append(f"[设置] 加载失败: {str(e)}")
         else:
             self.output_area.append(f"[设置] 设置文件未找到: {config_path}")
-        
+
         # 连接输出区域的自动滚动
         self.output_area.textChanged.connect(self.auto_scroll_output)
 
     def init_menu_bar(self):
         """初始化菜单栏"""
         menubar = self.menuBar()
-        
+
         # 连接菜单
         self.connection_menu = menubar.addMenu("连接")
         self.connect_action = self.connection_menu.addAction("连接配置")
         self.connect_action.triggered.connect(self.toggle_connection)
-        
+
         # 帮助菜单
         help_menu = menubar.addMenu("帮助")
         # 读取说明选项
-        about_action = help_menu.addAction("ReadMe")
-        about_action.triggered.connect(self.ShowReadMe)
+        readme_action = help_menu.addAction("ReadMe")
+        readme_action.triggered.connect(self.show_readme)
         # 关于选项
         about_action = help_menu.addAction("关于")
         about_action.triggered.connect(self.show_about)
 
-    def ShowReadMe(self):
+    def show_readme(self):
         # 渲染README.md内容到窗口
         class MarkdownViewer(QDialog):
             def __init__(self, parent=None):
@@ -181,11 +204,11 @@ class SCPIGUI(QMainWindow):
             viewer.exec()
         else:
             self.show_error("未找到README.md文件")
-        
+
     def show_about(self):
         """显示关于对话框"""
         QMessageBox.about(self, "关于", f"SCPI Command Sender\n版本: {VERSION}")
-        
+
     def init_ui(self):
         """初始化用户界面"""
         # 主布局
@@ -196,7 +219,8 @@ class SCPIGUI(QMainWindow):
         self.main_layout.setSpacing(10)
 
         # 设置全局样式
-        self.setStyleSheet(f"""
+        self.setStyleSheet(
+            f"""
             QWidget {{
                 font-family: 'Microsoft YaHei', '微软雅黑', sans-serif;
                 font-size: 10pt;
@@ -208,12 +232,8 @@ class SCPIGUI(QMainWindow):
             /* 连接状态指示器 */
             .connected {{ color: #4CAF50; }}
             .disconnected {{ color: #f44336; }}
-        """)
-
-        main_widget = QWidget()
-        main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(10)
+        """
+        )
 
         # 连接状态显示区域
         conn_status_group = QGroupBox("连接状态")
@@ -227,12 +247,12 @@ class SCPIGUI(QMainWindow):
         self.instrument_info.setStyleSheet(STYLES["Label_not_acquired"])
         self.instrument_info.setToolTip("仪器标识信息")
         conn_status_layout.addWidget(self.instrument_info, stretch=1)
-        
+
         # 连接状态指示器
         self.connection_status = QLabel("🔴 未连接")
         self.connection_status.setStyleSheet(STYLES["QLabel_noconnect"])
         conn_status_layout.addWidget(self.connection_status)
-        
+
         conn_status_group.setLayout(conn_status_layout)
 
         # 配置加载区域
@@ -272,19 +292,19 @@ class SCPIGUI(QMainWindow):
         btn_layout = QHBoxLayout()
         btn_layout.setContentsMargins(0, 0, 0, 0)
         btn_layout.setSpacing(5)
-        
+
         self.save_preset_btn = QPushButton("💾 保存预设")
         self.save_preset_btn.setToolTip("保存当前配置为预设")
         self.save_preset_btn.setStyleSheet(STYLES["SavePresetBtn"])
         self.save_preset_btn.clicked.connect(self.save_preset_to_file)
         btn_layout.addWidget(self.save_preset_btn)
-        
+
         self.del_preset_btn = QPushButton("🗑️ 删除预设")
         self.del_preset_btn.setToolTip("删除当前选中预设")
         self.del_preset_btn.setStyleSheet(STYLES["DelPresetBtn"])
         self.del_preset_btn.clicked.connect(self.del_preset)
         btn_layout.addWidget(self.del_preset_btn)
-        
+
         btn_container.setLayout(btn_layout)
         preset_layout.addWidget(btn_container)
 
@@ -295,7 +315,9 @@ class SCPIGUI(QMainWindow):
         self.command_list.setDragDropMode(QListWidget.InternalMove)  # 启用拖拽排序
         self.command_list.itemDoubleClicked.connect(self.edit_command)  # 双击编辑
         self.command_list.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.command_list.customContextMenuRequested.connect(self.show_command_context_menu)
+        self.command_list.customContextMenuRequested.connect(
+            self.show_command_context_menu
+        )
 
         # 命令编辑
         cmd_edit_layout = QHBoxLayout()
@@ -303,21 +325,21 @@ class SCPIGUI(QMainWindow):
         self.new_cmd_input = QLineEdit()
         self.new_cmd_input.setPlaceholderText("输入SCPI命令...")
         self.new_cmd_input.setStyleSheet("QLineEdit { padding: 5px; }")
-        
+
         self.add_cmd_btn = QPushButton("➕ 添加")
         self.add_cmd_btn.setToolTip("添加当前指令到列表")
         self.add_cmd_btn.setStyleSheet(STYLES["button"])
         self.add_cmd_btn.clicked.connect(self.add_command)
-        
+
         cmd_edit_layout.addWidget(self.new_cmd_input, stretch=1)
         cmd_edit_layout.addWidget(self.add_cmd_btn)
-        
+
         # 添加直接发送按钮
         self.send_now_btn = QPushButton("⚡ 直接发送")
         self.send_now_btn.setStyleSheet(STYLES["SavePresetBtn"])
         self.send_now_btn.clicked.connect(self.send_single_command)
         cmd_edit_layout.addWidget(self.send_now_btn)
-        
+
         # 创建新的垂直布局来包含命令输入
         cmd_input_and_actions = QVBoxLayout()
         cmd_input_and_actions.addLayout(cmd_edit_layout)
@@ -345,26 +367,26 @@ class SCPIGUI(QMainWindow):
         # 执行按钮和进度条布局
         exec_btn_layout = QHBoxLayout()
         exec_btn_layout.setSpacing(8)
-        
+
         self.execute_btn = QPushButton("🚀 循环执行预设命令")
         self.execute_btn.setStyleSheet(STYLES["loop_preset_btn"])
         self.execute_btn.clicked.connect(self.execute_commands)
         self.execute_btn.setEnabled(False)
         exec_btn_layout.addWidget(self.execute_btn)
-        
+
         self.stop_btn = QPushButton("🛑 停止")
         self.stop_btn.setStyleSheet(STYLES["stop_loop_btn"])
         self.stop_btn.clicked.connect(self.stop_execution)
         self.stop_btn.setEnabled(False)
         exec_btn_layout.addWidget(self.stop_btn)
-        
+
         # 进度条
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         self.progress_bar.setStyleSheet(STYLES["progressbar"])
         exec_btn_layout.addWidget(self.progress_bar, stretch=1)
-        
+
         exec_layout.addLayout(exec_btn_layout)
 
         cmd_layout.addLayout(preset_layout)
@@ -390,29 +412,29 @@ class SCPIGUI(QMainWindow):
         self.version_label = QLabel(f"版本: {VERSION}")
         self.version_label.setStyleSheet("color: #666; font-size: 9pt;")
         self.status_bar.addPermanentWidget(self.version_label)
-        
+
         # 执行状态指示器
         self.execution_status = QLabel("🟡 空闲")
         self.execution_status.setStyleSheet(STYLES["QLabel_idle"])
         self.status_bar.addPermanentWidget(self.execution_status)
-        
+
         self.setStatusBar(self.status_bar)
         # 主布局顺序
         self.main_layout.addWidget(conn_status_group)  # 连接状态
         self.main_layout.addWidget(self.config_group)  # 配置管理
-        self.main_layout.addWidget(cmd_group)          # 命令设置
-        self.main_layout.addWidget(output_group)       # 输出区域
+        self.main_layout.addWidget(cmd_group)  # 命令设置
+        self.main_layout.addWidget(output_group)  # 输出区域
 
     def load_default_presets(self):
         """从配置文件加载预设"""
         try:
-            with open("config/presets.json", "r", encoding='utf-8') as f:
+            with open("config/presets.json", "r", encoding="utf-8") as f:
                 config = json.load(f)
-                self.presets = config.get("presets", {})                
+                self.presets = config.get("presets", {})
             self.update_preset_combo()
             self.output_area.append("[预设配置]加载成功：config/presets.json")
-        except Exception as e:
-            self.output_area.append(f"[预设配置]文件不存在：config/presets.json")
+        except Exception:
+            self.output_area.append("[预设配置]文件不存在：config/presets.json")
             self.presets = {}
             self.update_preset_combo()
 
@@ -431,7 +453,7 @@ class SCPIGUI(QMainWindow):
             self.repeat_input.setValue(1)
             self.interval_input.setValue(1.0)
             return
-            
+
         if preset_name not in self.presets:
             return
 
@@ -456,11 +478,12 @@ class SCPIGUI(QMainWindow):
         """从文件加载预设"""
         options = QFileDialog.Options()
         file_name, _ = QFileDialog.getOpenFileName(
-            self, "加载预设", "", "JSON Files (*.json);;All Files (*)", options=options)
+            self, "加载预设", "", "JSON Files (*.json);;All Files (*)", options=options
+        )
 
         if file_name:
             try:
-                with open(file_name, 'r', encoding='utf-8') as f:
+                with open(file_name, "r", encoding="utf-8") as f:
                     preset_data = json.load(f)
 
                 if not isinstance(preset_data, dict):
@@ -471,7 +494,7 @@ class SCPIGUI(QMainWindow):
                     "description": preset_data.get("description", "无描述"),
                     "commands": preset_data.get("commands", []),
                     "repeat": preset_data.get("repeat", 1),
-                    "interval": preset_data.get("interval", 1.0)
+                    "interval": preset_data.get("interval", 1.0),
                 }
 
                 self.update_preset_combo()
@@ -483,29 +506,29 @@ class SCPIGUI(QMainWindow):
 
     def del_preset(self):
         """删除当前选中的预设"""
-        if not hasattr(self, 'current_preset') or not self.current_preset:
+        if not hasattr(self, "current_preset") or not self.current_preset:
             QMessageBox.warning(self, "警告", "请先选择一个预设")
             return
-            
+
         reply = QMessageBox.question(
             self,
-            '确认删除',
+            "确认删除",
             f'确定要删除预设 "{self.current_preset}" 吗？',
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
+            QMessageBox.StandardButton.No,
         )
-        
+
         if reply == QMessageBox.StandardButton.Yes:
             try:
-                with open("config/presets.json", "r", encoding='utf-8') as f:
+                with open("config/presets.json", "r", encoding="utf-8") as f:
                     presets = json.load(f)
-                
+
                 if self.current_preset in presets["presets"]:
                     del presets["presets"][self.current_preset]
-                    
-                    with open("config/presets.json", "w", encoding='utf-8') as f:
+
+                    with open("config/presets.json", "w", encoding="utf-8") as f:
                         json.dump(presets, f, indent=4, ensure_ascii=False)
-                    
+
                     self.presets = presets["presets"]
                     self.preset_combo.clear()
                     self.preset_combo.addItem("---------- 选择预设 ----------")
@@ -515,24 +538,27 @@ class SCPIGUI(QMainWindow):
                     self.command_list.clear()
                     QMessageBox.information(self, "成功", "预设已删除")
                 else:
-                    QMessageBox.warning(self, "警告", f"预设 '{self.current_preset}' 不存在")
-                    
+                    QMessageBox.warning(
+                        self, "警告", f"预设 '{self.current_preset}' 不存在"
+                    )
+
             except Exception as e:
                 QMessageBox.critical(self, "错误", f"删除预设失败: {str(e)}")
                 self.append_output(f"删除预设失败: {str(e)}", "ERROR")
+
     def apply_configuration(self):
         """应用选定的配置"""
         if not self.instrument or not self.instrument.sock:
             self.output_area.append("[配置] 错误: 请先连接仪器")
             QMessageBox.warning(self, "警告", "请先连接到仪器")
             return
-            
+
         config_name = self.config_combo.currentText()
         if not config_name:
             self.output_area.append("[配置] 错误: 请选择一个设置")
             QMessageBox.warning(self, "警告", "请选择一个设置")
             return
-            
+
         try:
             self.configurator.apply_configuration(self.instrument, config_name)
             self.output_area.append(f"[配置] 应用成功: {config_name}")
@@ -549,39 +575,44 @@ class SCPIGUI(QMainWindow):
 
         # 获取预设名称和描述
         preset_name, ok = QInputDialog.getText(
-            self, "保存预设", "输入预设名称:", QLineEdit.Normal, "")
+            self, "保存预设", "输入预设名称:", QLineEdit.Normal, ""
+        )
         if not ok or not preset_name:
             return
-            
+
         preset_desc, ok = QInputDialog.getText(
-            self, "保存预设", "输入预设描述:", QLineEdit.Normal, "")
+            self, "保存预设", "输入预设描述:", QLineEdit.Normal, ""
+        )
         if not ok:
             return
 
         try:
             # 读取现有预设
-            with open("config/presets.json", "r", encoding='utf-8') as f:
+            with open("config/presets.json", "r", encoding="utf-8") as f:
                 presets_data = json.load(f)
-                
+
             # 添加或更新预设
             presets_data["presets"][preset_name] = {
                 "description": preset_desc,
-                "commands": [self.command_list.item(i).text() for i in range(self.command_list.count())],
+                "commands": [
+                    self.command_list.item(i).text()
+                    for i in range(self.command_list.count())
+                ],
                 "repeat": self.repeat_input.value(),
-                "interval": self.interval_input.value()
+                "interval": self.interval_input.value(),
             }
-            
+
             # 写回文件
-            with open("config/presets.json", "w", encoding='utf-8') as f:
+            with open("config/presets.json", "w", encoding="utf-8") as f:
                 json.dump(presets_data, f, indent=4, ensure_ascii=False)
-                
+
             # 更新内存中的预设数据
             self.presets = presets_data["presets"]
             self.update_preset_combo()
             self.preset_combo.setCurrentText(preset_name)
-            
+
             self.append_output(f"预设 '{preset_name}' 已保存到presets.json")
-            
+
         except Exception as e:
             QMessageBox.critical(self, "错误", f"保存预设失败: {str(e)}")
             self.append_output(f"保存预设失败: {str(e)}", "ERROR")
@@ -592,7 +623,7 @@ class SCPIGUI(QMainWindow):
         if not cmd:
             QMessageBox.warning(self, "警告", "命令不能为空")
             return
-            
+
         self.command_list.addItem(cmd)
         self.new_cmd_input.clear()
 
@@ -601,12 +632,12 @@ class SCPIGUI(QMainWindow):
         if not self.is_connected():
             QMessageBox.warning(self, "警告", "请先连接到设备")
             return
-        
+
         cmd = self.new_cmd_input.text().strip()
         if not cmd:
             QMessageBox.warning(self, "警告", "请输入要发送的命令")
             return
-        
+
         try:
             response = self.instrument.send_command(cmd)
             timestamp = logger.get_timestamp()
@@ -627,23 +658,27 @@ class SCPIGUI(QMainWindow):
         """清空命令列表(带确认对话框)"""
         reply = QMessageBox.question(
             self,
-            '确认清空',
-            '确定要清空所有命令吗？',
+            "确认清空",
+            "确定要清空所有命令吗？",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
+            QMessageBox.StandardButton.No,
         )
-        
+
         if reply == QMessageBox.StandardButton.Yes:
             self.command_list.clear()
             self.preset_combo.setCurrentIndex(0)  # 重置预设选择
 
     def is_connected(self):
         """检查是否真正连接到上位机"""
-        return self.instrument and hasattr(self.instrument, 'sock') and self.instrument.sock
+        return (
+            self.instrument
+            and hasattr(self.instrument, "sock")
+            and self.instrument.sock
+        )
 
     def is_valid_ip(self, ip_str):
         """验证IP地址格式是否为xxx.xxx.xxx.xxx"""
-        parts = ip_str.split('.')
+        parts = ip_str.split(".")
         if len(parts) != 4:
             return False
         for part in parts:
@@ -657,38 +692,42 @@ class SCPIGUI(QMainWindow):
     def validate_ip_input(self, text):
         """实时验证IP地址输入"""
         # 允许中间输入过程的不完整格式
-        if not text or text.count('.') > 3:
-            self.host_input.setStyleSheet("background-color: #FFD6D6; padding: 2px; margin-left: 0px;")
+        if not text or text.count(".") > 3:
+            self.host_input.setStyleSheet(
+                "background-color: #FFD6D6; padding: 2px; margin-left: 0px;"
+            )
             return
-            
-        parts = text.split('.')
+
+        parts = text.split(".")
         valid = True
         for part in parts:
             if not part.isdigit() or (part and int(part) > 255):
                 valid = False
                 break
-                
+
         if valid:
             self.host_input.setStyleSheet("padding: 2px; margin-left: 0px;")
         else:
-            self.host_input.setStyleSheet("background-color: #FFD6D6; padding: 2px; margin-left: 0px;")
+            self.host_input.setStyleSheet(
+                "background-color: #FFD6D6; padding: 2px; margin-left: 0px;"
+            )
 
     def format_ip_input(self):
         """自动格式化IP地址输入"""
         text = self.host_input.text()
         parts = []
-        current = ''
-        
+        current = ""
+
         # 提取数字部分
         for char in text:
             if char.isdigit():
                 current += char
-            elif char == '.' and current:
+            elif char == "." and current:
                 parts.append(current)
-                current = ''
+                current = ""
         if current:
             parts.append(current)
-            
+
         # 限制最多4部分，每部分最多3位
         parts = parts[:4]
         formatted = []
@@ -696,14 +735,14 @@ class SCPIGUI(QMainWindow):
             if part:
                 formatted.append(part[:3])
             else:
-                formatted.append('0')
-                
+                formatted.append("0")
+
         # 补全为4部分
         while len(formatted) < 4:
-            formatted.append('0')
-            
+            formatted.append("0")
+
         # 组合为标准IP格式
-        self.host_input.setText('.'.join(formatted[:4]))
+        self.host_input.setText(".".join(formatted[:4]))
 
     def set_connection_ui(self, connected):
         """设置连接状态UI"""
@@ -715,12 +754,14 @@ class SCPIGUI(QMainWindow):
     def _update_connection_status(self, text, bg_color, text_color, enable_execute):
         """统一更新连接状态UI"""
         self.connection_status.setText(text)
-        self.connection_status.setStyleSheet(f"""
+        self.connection_status.setStyleSheet(
+            f"""
             QLabel {{
                 background-color: {bg_color};
                 color: {text_color};
             }}
-        """)
+        """
+        )
         self.execute_btn.setEnabled(enable_execute)
 
     def execute_commands(self):
@@ -729,7 +770,9 @@ class SCPIGUI(QMainWindow):
             QMessageBox.warning(self, "警告", "未连接到上位机")
             return
 
-        commands = [self.command_list.item(i).text() for i in range(self.command_list.count())]
+        commands = [
+            self.command_list.item(i).text() for i in range(self.command_list.count())
+        ]
         if not commands:
             QMessageBox.warning(self, "警告", "没有可执行的命令")
             return
@@ -739,11 +782,11 @@ class SCPIGUI(QMainWindow):
 
         # 重置进度条
         self.progress_bar.setValue(0)
-        
+
         # 更新UI状态
         self.execute_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
-        self.set_execution_state('executing')
+        self.set_execution_state("executing")
         self.append_output(f"开始执行 {len(commands)} 条命令，重复 {repeat} 次...")
 
         # 如果存在之前的worker，先断开所有信号连接
@@ -753,9 +796,9 @@ class SCPIGUI(QMainWindow):
                 self.worker.progress_updated.disconnect()
                 self.worker.finished.disconnect()
                 self.worker.error_occurred.disconnect()
-            except:
+            except Exception:
                 pass  # 忽略断开连接时的错误
-        
+
         # 创建工作线程
         self.worker = SCPIWorker(self.instrument, commands, repeat, interval)
         self.worker.command_sent.connect(self.handle_command_result)
@@ -768,12 +811,14 @@ class SCPIGUI(QMainWindow):
         """处理单个命令的结果"""
         timestamp = logger.get_timestamp()
         total_loops = self.repeat_input.value()
-        
+
         # 如果只循环一次，不显示循环信息
         if total_loops > 1:
             self.append_output(f"{timestamp} [循环 {loop_num}/{total_loops}] > {cmd}")
             if response != "None":
-                self.append_output(f"{timestamp} [循环 {loop_num}/{total_loops}] < {response}")
+                self.append_output(
+                    f"{timestamp} [循环 {loop_num}/{total_loops}] < {response}"
+                )
         else:
             self.append_output(f"{timestamp} > {cmd}")
             if response != "None":
@@ -793,7 +838,7 @@ class SCPIGUI(QMainWindow):
             self.append_output("用户手动停止执行...")
             self.execute_btn.setEnabled(True)
             self.stop_btn.setEnabled(False)
-            self.set_execution_state('idle')
+            self.set_execution_state("idle")
             self.progress_bar.setValue(0)
             self.worker = None
 
@@ -803,15 +848,15 @@ class SCPIGUI(QMainWindow):
             state: 执行状态 ('idle', 'executing', 'completed', 'error')
         """
         if state in execution_state_STYLES:
-            self.execution_status.setText(execution_state_STYLES[state]['text'])
-            self.execution_status.setStyleSheet(execution_state_STYLES[state]['style'])
+            self.execution_status.setText(execution_state_STYLES[state]["text"])
+            self.execution_status.setStyleSheet(execution_state_STYLES[state]["style"])
 
     def handle_execution_finished(self):
         """处理执行完成"""
         self.append_output("命令执行完成")
         self.execute_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
-        self.set_execution_state('completed')
+        self.set_execution_state("completed")
         self.progress_bar.setValue(100)
         self.worker = None
 
@@ -820,7 +865,7 @@ class SCPIGUI(QMainWindow):
         self.append_output(f"错误: {error_msg}", "ERROR")
         self.execute_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
-        self.set_execution_state('error')
+        self.set_execution_state("error")
         self.progress_bar.setValue(0)
         self.worker = None
         QMessageBox.critical(self, "执行错误", error_msg)
@@ -841,33 +886,32 @@ class SCPIGUI(QMainWindow):
             self.command_list.insertItem(current_row + 1, current_item)
             self.command_list.setCurrentRow(current_row + 1)
 
-
     def show_command_context_menu(self, position):
         """显示命令列表的右键菜单"""
         menu = QMenu()
         item = self.command_list.itemAt(position)
-        
+
         # 添加菜单项
         move_up_action = menu.addAction("⬆️ 上移")
         move_down_action = menu.addAction("⬇️ 下移")
         edit_action = menu.addAction("✏️ 编辑")
-        remove_action = menu.addAction("➖ 删除") 
+        remove_action = menu.addAction("➖ 删除")
         clear_action = menu.addAction("🗑️ 清空")
-        
+
         # 连接信号
         edit_action.triggered.connect(self.edit_command)
         remove_action.triggered.connect(self.remove_command)
         move_up_action.triggered.connect(self.move_command_up)
         move_down_action.triggered.connect(self.move_command_down)
         clear_action.triggered.connect(self.clear_commands)
-        
+
         # 设置启用状态
         state = item is not None
         edit_action.setEnabled(state)
         remove_action.setEnabled(state)
         move_up_action.setEnabled(state)
         move_down_action.setEnabled(state)
-        
+
         menu.exec(self.command_list.viewport().mapToGlobal(position))
 
     def edit_command(self):
@@ -880,8 +924,10 @@ class SCPIGUI(QMainWindow):
             dialog.setWindowTitle("编辑命令")
             dialog.setLabelText("修改SCPI命令:")
             dialog.setTextValue(current_text)
-            dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
-            
+            dialog.setWindowFlags(
+                dialog.windowFlags() & ~Qt.WindowContextHelpButtonHint
+            )
+
             if dialog.exec() == QDialog.Accepted:
                 new_text = dialog.textValue().strip()
                 if new_text:
@@ -897,7 +943,7 @@ class SCPIGUI(QMainWindow):
         """追加文本到输出区域并记录到日志"""
         # 添加到输出区域
         self.output_area.append(text)
-        
+
         # 检测并去除时间戳
         if text.startswith("[") and "]" in text:
             # 找到第一个"]"的位置
@@ -906,7 +952,7 @@ class SCPIGUI(QMainWindow):
             message = text[timestamp_end:].strip()
         else:
             message = text
-            
+
         # 记录到日志文件
         if level == "ERROR":
             logger.error(message)
@@ -922,46 +968,90 @@ class SCPIGUI(QMainWindow):
             connection_info = dialog.get_connection_info()
             if connection_info:
                 self.connect_to_instrument(connection_info)
-    
+
     def connect_to_instrument(self, connection_info):
         """连接到仪器"""
         try:
-            # 使用工厂模式创建仪器实例
-            self.instrument = SCPIInstrumentFactory.create_instrument(
-                connection_info['protocol'],
-                **{k: v for k, v in connection_info.items() if k != 'protocol'}
-            )
-            self.instrument.connect()
-            
-            # 获取仪器信息
-            try:
-                idn = self.instrument.send_command("*IDN?")
-                if idn:
-                    parts = [p.strip() for p in idn.split(',')]
-                    # 确保至少有3个部分，不足的用空字符串填充
-                    while len(parts) < 3:
-                        parts.append('')
-                    # 显示制造商、型号和序列号
-                    short_id = f"{parts[0]} {parts[1]} (SN:{parts[2]})" if parts[2] else f"{parts[0]} {parts[1]}"
-                    self.instrument_info.setText(short_id)
-                    self.instrument_info.setToolTip(idn)
-                else:
-                    self.instrument_info.setText("无响应")
-                    self.append_output("仪器未返回标识信息", "WARNING")
-            except Exception as e:
-                self.instrument_info.setText("获取失败")
-                self.append_output(f"获取仪器信息错误: {str(e)}", "ERROR")
-            
-            # 显示连接信息
-            if connection_info['protocol'] == 'TCP/IP':
+            # 根据协议类型创建不同的连接
+            if connection_info["protocol"] == "TCP/IP":
+                # 创建SCPI仪器实例(TCP/IP)
+                self.instrument = SCPIInstrument(
+                    host=connection_info["host"],
+                    port=connection_info["port"]
+                )
+                self.instrument.connect()
+
+                # 获取仪器信息
+                try:
+                    idn = self.instrument.send_command("*IDN?")
+                    if idn:
+                        parts = [p.strip() for p in idn.split(",")]
+                        # 确保至少有3个部分，不足的用空字符串填充
+                        while len(parts) < 3:
+                            parts.append("")
+                        # 显示制造商、型号和序列号
+                        short_id = (
+                            f"{parts[0]} {parts[1]} (SN:{parts[2]})"
+                            if parts[2]
+                            else f"{parts[0]} {parts[1]}"
+                        )
+                        self.instrument_info.setText(short_id)
+                        self.instrument_info.setToolTip(idn)
+                    else:
+                        self.instrument_info.setText("无响应")
+                        self.append_output("仪器未返回标识信息", "WARNING")
+                except Exception as e:
+                    self.instrument_info.setText("获取失败")
+                    self.append_output(f"获取仪器信息错误: {str(e)}", "ERROR")
+
+                # 显示连接信息
                 connection_str = f"{connection_info['host']}:{connection_info['port']}"
+            elif connection_info["protocol"] == "VISA":
+                # 创建SCPI仪器实例(VISA)
+                address = connection_info.get("address")
+                if not address:
+                    QMessageBox.warning(self, "警告", "VISA地址不能为空")
+                    return
+                
+                self.instrument = SCPIInstrument(visa_address=address)
+                self.instrument.connect()
+
+                # 获取仪器信息
+                try:
+                    idn = self.instrument.send_command("*IDN?")
+                    if idn:
+                        parts = [p.strip() for p in idn.split(",")]
+                        # 确保至少有3个部分，不足的用空字符串填充
+                        while len(parts) < 3:
+                            parts.append("")
+                        # 显示制造商、型号和序列号
+                        short_id = (
+                            f"{parts[0]} {parts[1]} (SN:{parts[2]})"
+                            if parts[2]
+                            else f"{parts[0]} {parts[1]}"
+                        )
+                        self.instrument_info.setText(short_id)
+                        self.instrument_info.setToolTip(idn)
+                    else:
+                        self.instrument_info.setText("无响应")
+                        self.append_output("仪器未返回标识信息", "WARNING")
+                except Exception as e:
+                    self.instrument_info.setText("获取失败")
+                    self.append_output(f"获取仪器信息错误: {str(e)}", "ERROR")
+
+                # 显示连接信息
+                connection_str = address
             else:
-                connection_str = connection_info['address']
-            
+                # 不支持的协议类型
+                QMessageBox.warning(self, "警告", f"暂不支持{connection_info['protocol']}协议")
+                return
+
             self.set_connection_ui(True)
             self.update_connection_menu(True)
-            self.append_output(f"已通过 {connection_info['protocol']} 连接到 {connection_str}")
-            if 'idn' in locals() and idn:
+            self.append_output(
+                f"已通过 {connection_info['protocol']} 连接到 {connection_str}"
+            )
+            if "idn" in locals() and idn:
                 self.append_output(f"仪器标识: {idn}")
         except SCPIError as e:
             self.append_output(f"连接失败: {str(e)}", "ERROR")
@@ -969,26 +1059,25 @@ class SCPIGUI(QMainWindow):
             if self.instrument:
                 try:
                     self.instrument.disconnect()
-                except:
+                except Exception:
                     pass
                 self.instrument = None
             self.set_connection_ui(False)
             self.instrument_info.setText("连接失败")
 
-    
     def toggle_connection(self):
         """切换连接状态"""
         if self.is_connected():
             self.disconnect_instrument()
         else:
             self.show_connection_dialog()
-    
+
     def disconnect_instrument(self):
         """断开仪器连接"""
         if not self.is_connected():
             QMessageBox.information(self, "信息", "当前未连接到仪器")
             return
-            
+
         try:
             self.instrument.disconnect()
             self.set_connection_ui(False)
@@ -999,12 +1088,12 @@ class SCPIGUI(QMainWindow):
             self.instrument = None
         except Exception as e:
             QMessageBox.critical(self, "错误", f"断开连接错误: {str(e)}")
-    
+
     def update_connection_menu(self, connected):
         """更新连接菜单状态"""
         # 清除菜单项
         self.connection_menu.clear()
-        
+
         if connected:
             # 已连接状态：显示断开连接选项
             self.connect_action = self.connection_menu.addAction("断开连接")
@@ -1013,6 +1102,7 @@ class SCPIGUI(QMainWindow):
             # 未连接状态：显示连接配置选项
             self.connect_action = self.connection_menu.addAction("连接配置")
             self.connect_action.triggered.connect(self.toggle_connection)
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

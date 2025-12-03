@@ -9,13 +9,15 @@ class DCAConfigurator:
     def __init__(self):
         self.configurations: Dict[str, List[str]] = {}
 
-    def load_configurations(self, config_path: str = 'dcasetting.ini') -> Dict[str, List[str]]:
+    def load_configurations(
+        self, config_path: str = "dcasetting.ini"
+    ) -> Dict[str, List[str]]:
         """
         从配置文件加载预定义的配置
-        
+
         参数:
             config_path: 配置文件路径
-        
+
         返回:
             配置字典，格式为 {配置名称: [命令列表]}
         """
@@ -27,19 +29,23 @@ class DCAConfigurator:
             raise FileNotFoundError(f"找不到配置文件: {config_path}")
 
         try:
-            config.read(config_path, encoding='utf-8')
+            config.read(config_path, encoding="utf-8")
             configurations = {}
 
             # 遍历所有section
             for section in config.sections():
                 # 只处理包含commands键的配置
-                if config.has_option(section, 'commands'):
+                if config.has_option(section, "commands"):
                     # 获取命令字符串
-                    cmd_str = config[section]['commands']
+                    cmd_str = config[section]["commands"]
                     # 分割命令为列表
-                    commands = cmd_str.split('\n')
+                    commands = cmd_str.split("\n")
                     # 过滤空行和注释行
-                    commands = [cmd.strip() for cmd in commands if cmd.strip() and not cmd.strip().startswith(';')]
+                    commands = [
+                        cmd.strip()
+                        for cmd in commands
+                        if cmd.strip() and not cmd.strip().startswith(";")
+                    ]
                     configurations[section] = commands
                 else:
                     # 对于没有commands键的配置，记录警告
@@ -54,7 +60,7 @@ class DCAConfigurator:
     def apply_configuration(self, instrument: SCPIInstrument, config_name: str) -> None:
         """
         应用选定的配置
-        
+
         参数:
             instrument: SCPIInstrument 实例
             config_name: 配置名称

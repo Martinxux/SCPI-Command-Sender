@@ -1,9 +1,13 @@
 """
 通用UI组件模块
 """
+
 from PySide6.QtWidgets import (
-    QGroupBox, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
 )
 
 

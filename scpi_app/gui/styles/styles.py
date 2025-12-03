@@ -1,43 +1,44 @@
 """
 GUI样式定义模块
 """
+
 execution_state_STYLES = {
-    'idle': {
-                'text': "🟡 空闲",
-                'style': """
+    "idle": {
+        "text": "🟡 空闲",
+        "style": """
                     QLabel {
                         background-color: #fff8e1;
                         color: #ff8f00;
                     }
-                """
-            },
-            'executing': {
-                'text': "🟠 执行中", 
-                'style': """
+                """,
+    },
+    "executing": {
+        "text": "🟠 执行中",
+        "style": """
                     QLabel {
                         background-color: #fff3e0;
                         color: #e65100;
                     }
-                """
-            },
-            'completed': {
-                'text': "🟢 完成",
-                'style': """
+                """,
+    },
+    "completed": {
+        "text": "🟢 完成",
+        "style": """
                     QLabel {
                         background-color: #e8f5e9;
                         color: #2e7d32;
                     }
-                """
-            },
-            'error': {
-                'text': "🔴 错误",
-                'style': """
+                """,
+    },
+    "error": {
+        "text": "🔴 错误",
+        "style": """
                     QLabel {
                         background-color: #ffebee;
                         color: #c62828;
                     }
-                """
-            }
+                """,
+    },
 }
 STYLES = {
     "button": """
@@ -66,11 +67,11 @@ STYLES = {
             border-radius: 3px;
             padding: 3px;
         }
-        
+
         QLineEdit:hover, QTextEdit:hover, QListWidget:hover, QComboBox:hover {
             border-color: #4CAF50;
         }
-        
+
         QLineEdit:focus, QTextEdit:focus, QListWidget:focus, QComboBox:focus {
             border-color: #4CAF50;
             border-width: 1px;
@@ -95,7 +96,7 @@ STYLES = {
         }
     """,
     "hostconnect": """
-            QGroupBox { 
+            QGroupBox {
                 background-color: #f9f9f9;
                 padding: 10px;
             }
@@ -243,44 +244,44 @@ STYLES = {
             max-width: 100px;
             font-family: 'Microsoft YaHei', '微软雅黑', sans-serif;
         }
-        
+
         QSpinBox:hover, QDoubleSpinBox:hover {
             border-color: #4CAF50;
         }
-        
+
         QSpinBox:focus, QDoubleSpinBox:focus {
             border-color: #4CAF50;
             border-width: 1px;
         }
-        
+
         QSpinBox::up-button, QDoubleSpinBox::up-button {
             width: 16px;
             border-left: 1px solid #ccc;
             background-color: #f5f5f5;
             border-top-right-radius: 2px;
         }
-        
+
         QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover {
             background-color: #e0e0e0;
         }
-        
+
         QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
             image: url(scpi_app/gui/icons/arrow_up.svg);
             width: 8px;
             height: 8px;
         }
-        
+
         QSpinBox::down-button, QDoubleSpinBox::down-button {
             width: 16px;
             border-left: 1px solid #ccc;
             background-color: #f5f5f5;
             border-bottom-right-radius: 2px;
         }
-        
+
         QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {
             background-color: #e0e0e0;
         }
-        
+
         QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
             image: url(scpi_app/gui/icons/arrow_down.svg);
             width: 8px;
@@ -296,16 +297,16 @@ STYLES = {
             min-width: 150px;
             font-family: 'Microsoft YaHei', '微软雅黑', sans-serif;
         }
-        
+
         QComboBox:hover {
             border-color: #4CAF50;
         }
-        
+
         QComboBox:focus {
             border-color: #4CAF50;
             border-width: 1px;
         }
-        
+
         QComboBox::drop-down {
             subcontrol-origin: padding;
             subcontrol-position: top right;
@@ -314,18 +315,18 @@ STYLES = {
             border-top-right-radius: 2px;
             border-bottom-right-radius: 2px;
         }
-        
+
         QComboBox::down-arrow {
             image: url(scpi_app/gui/icons/arrow_down.svg);
             width: 8px;
             height: 8px;
         }
-        
+
         QComboBox::down-arrow:on {
             top: 1px;
             left: 1px;
         }
-        
+
         QComboBox QAbstractItemView {
             border: 1px solid #ccc;
             border-radius: 3px;
@@ -333,19 +334,19 @@ STYLES = {
             selection-background-color: #e0f7fa;
             outline: 0;
         }
-        
+
         QComboBox QAbstractItemView::item {
             padding: 4px 8px;
             border-bottom: 1px solid #f0f0f0;
         }
-        
+
         QComboBox QAbstractItemView::item:selected {
             background-color: #e0f7fa;
             color: #000;
         }
-        
+
         QComboBox QAbstractItemView::item:hover {
             background-color: #f5f5f5;
         }
-    """
+    """,
 }

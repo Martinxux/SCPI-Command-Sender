@@ -1,3 +1,3 @@
 # SCPI应用程序主包
-from .core import *
-from .gui import *
+# 主要模块导入
+# 避免使用通配符导入，提高代码安全性

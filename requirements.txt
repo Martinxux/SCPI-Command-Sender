@@ -1,0 +1,6 @@
+PySide6
+pytest
+pytest-cov
+black
+flake8
+python-dotenv
