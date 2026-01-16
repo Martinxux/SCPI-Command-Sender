@@ -1040,44 +1040,6 @@ class SCPIGUI(QMainWindow):
 
                 # 显示连接信息
                 connection_str = address
-            elif connection_info["protocol"] == "USB":
-                # 创建SCPI仪器实例(直接USB)
-                vid = connection_info.get("vid")
-                pid = connection_info.get("pid")
-                usb_address = connection_info.get("address", "")
-                
-                if not vid or not pid:
-                    QMessageBox.warning(self, "警告", "VID和PID不能为空")
-                    return
-
-                self.instrument = SCPIInstrument(vid=vid, pid=pid)
-                self.instrument.connect()
-
-                # 获取仪器信息
-                try:
-                    idn = self.instrument.send_command("*IDN?")
-                    if idn:
-                        parts = [p.strip() for p in idn.split(",")]
-                        # 确保至少有3个部分，不足的用空字符串填充
-                        while len(parts) < 3:
-                            parts.append("")
-                        # 显示制造商、型号和序列号
-                        short_id = (
-                            f"{parts[0]} {parts[1]} (SN:{parts[2]})"
-                            if parts[2]
-                            else f"{parts[0]} {parts[1]}"
-                        )
-                        self.instrument_info.setText(short_id)
-                        self.instrument_info.setToolTip(idn)
-                    else:
-                        self.instrument_info.setText("无响应")
-                        self.append_output("仪器未返回标识信息", "WARNING")
-                except Exception as e:
-                    self.instrument_info.setText("获取失败")
-                    self.append_output(f"获取仪器信息错误: {str(e)}", "ERROR")
-
-                # 显示连接信息
-                connection_str = f"USB VID:0x{int(vid, 16):04X}, PID:0x{int(pid, 16):04X}"
             else:
                 # 不支持的协议类型
                 QMessageBox.warning(self, "警告", f"暂不支持{connection_info['protocol']}协议")

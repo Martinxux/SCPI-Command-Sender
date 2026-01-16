@@ -122,7 +122,7 @@ class ConnectionDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("连接配置")
         self.setModal(True)
-        self.setMinimumSize(500, 400)  # 增加窗口高度以容纳USB配置
+        self.setMinimumSize(500, 300)
 
         # 设备扫描器
         self.scanner = None
@@ -155,22 +155,17 @@ class ConnectionDialog(QDialog):
         self.tcpip_radio = QRadioButton("TCP/IP")
         self.tcpip_radio.setChecked(True)
         self.visa_radio = QRadioButton("PyVISA")
-        self.usb_radio = QRadioButton("USB")
         
-        # 如果PyVISA不可用，禁用VISA相关选项，但USB可以独立使用
+        # 如果PyVISA不可用，禁用VISA相关选项
         if not is_pyvisa_available():
             self.visa_radio.setEnabled(False)
             self.visa_radio.setToolTip("PyVISA未安装")
-        else:
-            self.usb_radio.setToolTip("支持VISA或直接USB连接")
 
         self.tcpip_radio.toggled.connect(self.on_protocol_changed)
         self.visa_radio.toggled.connect(self.on_protocol_changed)
-        self.usb_radio.toggled.connect(self.on_protocol_changed)
 
         protocol_layout.addWidget(self.tcpip_radio)
         protocol_layout.addWidget(self.visa_radio)
-        protocol_layout.addWidget(self.usb_radio)
         protocol_layout.addStretch()
         protocol_group.setLayout(protocol_layout)
         layout.addWidget(protocol_group)
@@ -234,48 +229,6 @@ class ConnectionDialog(QDialog):
         self.visa_group.setLayout(visa_layout)
         layout.addWidget(self.visa_group)
 
-        # USB 配置区域
-        self.usb_group = QGroupBox("USB 配置")
-        usb_layout = QVBoxLayout()
-
-        # VID、PID 设置和刷新按钮在同一行
-        vid_pid_refresh_layout = QHBoxLayout()
-        vid_pid_refresh_layout.addWidget(QLabel("VID:"))
-        self.vid_input = QLineEdit("0x0465")  # 默认VID
-        self.vid_input.setFixedWidth(100)
-        self.vid_input.textChanged.connect(self.validate_hex_input)
-        vid_pid_refresh_layout.addWidget(self.vid_input)
-        
-        vid_pid_refresh_layout.addWidget(QLabel("PID:"))
-        self.pid_input = QLineEdit("0x0109")  # 默认PID
-        self.pid_input.setFixedWidth(100)
-        self.pid_input.textChanged.connect(self.validate_hex_input)
-        vid_pid_refresh_layout.addWidget(self.pid_input)
-        
-        # 添加刷新设备按钮
-        self.usb_refresh_btn = QPushButton("刷新设备")
-        self.usb_refresh_btn.clicked.connect(self.refresh_usb_devices)
-        vid_pid_refresh_layout.addWidget(self.usb_refresh_btn)
-        
-        vid_pid_refresh_layout.addStretch()
-        usb_layout.addLayout(vid_pid_refresh_layout)
-        
-        # USB设备列表
-        usb_layout.addWidget(QLabel("检测到的USB设备:"))
-        self.usb_device_list = QListWidget()
-        self.usb_device_list.setMinimumHeight(100)
-        self.usb_device_list.itemDoubleClicked.connect(self.on_usb_device_selected)
-        usb_layout.addWidget(self.usb_device_list)
-        
-        # 提示信息
-        hint_label = QLabel("提示: 选择USB设备或输入VID和PID后点击连接")
-        hint_label.setStyleSheet("font-size: 9pt; color: #555; font-style: italic;")
-        hint_label.setWordWrap(True)
-        usb_layout.addWidget(hint_label)
-
-        self.usb_group.setLayout(usb_layout)
-        layout.addWidget(self.usb_group)
-
         # 按钮区域
         button_layout = QHBoxLayout()
         self.connect_btn = QPushButton("连接")
@@ -296,16 +249,9 @@ class ConnectionDialog(QDialog):
         if self.tcpip_radio.isChecked():
             self.tcpip_group.setVisible(True)
             self.visa_group.setVisible(False)
-            self.usb_group.setVisible(False)
         elif self.visa_radio.isChecked():
             self.tcpip_group.setVisible(False)
             self.visa_group.setVisible(True)
-            self.usb_group.setVisible(False)
-        elif self.usb_radio.isChecked():
-            self.tcpip_group.setVisible(False)
-            self.visa_group.setVisible(False)
-            self.usb_group.setVisible(True)
-            # 用户切换到USB协议时，不自动刷新设备列表，等待用户点击刷新按钮
 
 
 
@@ -350,119 +296,6 @@ class ConnectionDialog(QDialog):
         address = item.data(Qt.UserRole)
         self.visa_address_input.setText(address)
 
-    def refresh_usb_devices(self):
-        """刷新USB设备列表，仅检测用户输入的VID/PID对应的设备"""
-        import subprocess
-        import re
-        
-        self.usb_device_list.clear()
-        self.usb_refresh_btn.setEnabled(False)
-        self.usb_refresh_btn.setText("扫描中...")
-        
-        try:
-            # 获取用户输入的VID和PID
-            vid_text = self.vid_input.text().strip().upper()
-            pid_text = self.pid_input.text().strip().upper()
-            
-            # 验证输入是否为有效的十六进制格式
-            if not re.match(r'^0X[0-9A-F]{4}$', vid_text) or not re.match(r'^0X[0-9A-F]{4}$', pid_text):
-                QMessageBox.warning(self, "警告", "请输入有效的十六进制VID/PID（例如：0x0465）")
-                return
-            
-            # 提取纯十六进制部分（去掉0x前缀）
-            target_vid = vid_text[2:]
-            target_pid = pid_text[2:]
-            
-            logger.info(f"开始扫描USB设备: VID=0x{target_vid}, PID=0x{target_pid}")
-            
-            # 使用wmic命令获取所有即插即用设备
-            cmd = "wmic path Win32_PnPEntity get DeviceID, Name"
-            result = subprocess.run(cmd, capture_output=True, text=True, shell=True, encoding='gbk')
-            
-            if result.returncode != 0:
-                logger.error(f"执行wmic命令失败: {result.stderr}")
-                QMessageBox.critical(self, "错误", "执行USB设备扫描命令失败")
-                return
-            
-            output = result.stdout
-            lines = output.strip().split('\n')[1:]  # 跳过标题行
-            
-            # 去重设备列表（基于DeviceID）
-            device_ids = set()
-            found_devices = []
-            
-            for line in lines:
-                line = line.strip()
-                if not line:
-                    continue
-                    
-                # 提取DeviceID和Name - 使用正则表达式处理多个空格
-                parts = re.split(r'\s{2,}', line)
-                if len(parts) < 2:
-                    continue
-                    
-                device_id = parts[0].strip()
-                device_name = ' '.join(parts[1:]).strip()
-                
-                # 检查是否为USB设备且包含目标VID和PID
-                if device_id.startswith('USB\\') and device_id not in device_ids:
-                    # 从DeviceID中提取VID和PID
-                    vid_pid_match = re.search(r'VID_(\w+)&PID_(\w+)', device_id)
-                    if vid_pid_match:
-                        vendor_id_hex = vid_pid_match.group(1)
-                        product_id_hex = vid_pid_match.group(2)
-                        
-                        # 检查是否匹配目标VID和PID
-                        if vendor_id_hex == target_vid and product_id_hex == target_pid:
-                            device_ids.add(device_id)
-                            found_devices.append((device_id, device_name, vendor_id_hex, product_id_hex))
-            
-            logger.info(f"找到 {len(found_devices)} 个匹配的USB设备")
-            
-            if found_devices:
-                for i, (device_id, device_name, vendor_id_hex, product_id_hex) in enumerate(found_devices):
-                    try:
-                        vendor_id = int(vendor_id_hex, 16)
-                        product_id = int(product_id_hex, 16)
-                        
-                        # 格式化设备信息（与设备管理器中格式一致）
-                        display_device_id = f"USB\\VID_{vendor_id_hex}&PID_{product_id_hex}"
-                        device_info = f"{display_device_id}"
-                        if device_name:
-                            device_info += f" - {device_name}"
-                        
-                        # 添加到设备列表
-                        item = QListWidgetItem(device_info)
-                        item.setData(Qt.UserRole, (vendor_id, product_id))  # 存储VID和PID
-                        self.usb_device_list.addItem(item)
-                        
-                        logger.info(f"找到匹配设备: VID=0x{vendor_id_hex}, PID=0x{product_id_hex}, 名称={device_name}")
-                    except Exception as e:
-                        logger.error(f"处理USB设备时出错: {str(e)}")
-                        continue
-                
-                QMessageBox.information(self, "提示", f"找到 {len(found_devices)} 个匹配的USB设备")
-            else:
-                QMessageBox.information(self, "提示", f"未找到VID=0x{target_vid}, PID=0x{target_pid}的USB设备")
-                logger.info(f"未找到VID=0x{target_vid}, PID=0x{target_pid}的USB设备")
-            
-        except Exception as e:
-            QMessageBox.critical(self, "错误", f"扫描USB设备时出错: {str(e)}")
-            logger.error(f"扫描USB设备时出错: {str(e)}")
-        finally:
-            self.usb_refresh_btn.setEnabled(True)
-            self.usb_refresh_btn.setText("刷新设备")
-
-    def on_usb_device_selected(self, item):
-        """USB设备选择事件"""
-        vendor_id, product_id = item.data(Qt.UserRole)
-        
-        # 填充VID和PID输入框
-        self.vid_input.setText(f"0x{vendor_id:04X}")
-        self.pid_input.setText(f"0x{product_id:04X}")
-        
-        logger.info(f"选择USB设备: VID=0x{vendor_id:04X}, PID=0x{product_id:04X}")
-
     def validate_ip_input(self, text):
         """实时验证IP地址输入"""
         if not text or text.count(".") > 3:
@@ -481,26 +314,6 @@ class ConnectionDialog(QDialog):
         else:
             self.host_input.setStyleSheet("background-color: #FFD6D6;")
             
-    def validate_hex_input(self):
-        """验证十六进制输入"""
-        import re
-        
-        # 检查VID输入
-        vid_text = self.vid_input.text()
-        vid_valid = bool(re.match(r'^0x[0-9A-Fa-f]{4}$', vid_text))
-        if vid_valid:
-            self.vid_input.setStyleSheet("")
-        else:
-            self.vid_input.setStyleSheet("background-color: #FFD6D6;")
-            
-        # 检查PID输入
-        pid_text = self.pid_input.text()
-        pid_valid = bool(re.match(r'^0x[0-9A-Fa-f]{4}$', pid_text))
-        if pid_valid:
-            self.pid_input.setStyleSheet("")
-        else:
-            self.pid_input.setStyleSheet("background-color: #FFD6D6;")
-
     def format_ip_input(self):
         """自动格式化IP地址输入"""
         text = self.host_input.text()
@@ -539,8 +352,6 @@ class ConnectionDialog(QDialog):
             protocol = "TCP/IP"
         elif self.visa_radio.isChecked():
             protocol = "VISA"
-        elif self.usb_radio.isChecked():
-            protocol = "USB"
         else:
             protocol = "TCP/IP"  # 默认值
 
@@ -553,23 +364,6 @@ class ConnectionDialog(QDialog):
         elif protocol == "VISA":
             address = self.visa_address_input.text().strip()
             return {"protocol": "VISA", "address": address}
-        elif protocol == "USB":
-            try:
-                vid = int(self.vid_input.text().strip(), 16)
-                pid = int(self.pid_input.text().strip(), 16)
-            except ValueError:
-                # 如果VID或PID格式错误，返回空
-                return None
-                
-            # 获取选中的USB设备地址 (如果有)
-            address = None
-            if hasattr(self, 'usb_device_list'):
-                selected_items = self.usb_device_list.selectedItems()
-                if selected_items:
-                    address = selected_items[0].data(Qt.UserRole)
-            
-            # 返回USB连接信息，包含VID和PID（必须），可选地址
-            return {"protocol": "USB", "vid": vid, "pid": pid, "address": address}
 
         return None
 
