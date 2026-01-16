@@ -69,6 +69,71 @@ def is_valid_ip(ip: str) -> bool:
     return True
 
 
+def validate_ip_input(ip_str: str) -> bool:
+    """
+    实时验证IP地址输入
+
+    参数:
+        ip_str: 输入的IP地址字符串
+
+    返回:
+        IP地址输入是否有效
+    """
+    # 允许中间输入过程的不完整格式
+    if not ip_str or ip_str.count(".") > 3:
+        return False
+
+    parts = ip_str.split(".")
+    valid = True
+    for part in parts:
+        if not part.isdigit() or (part and int(part) > 255):
+            valid = False
+            break
+
+    return valid
+
+
+
+def format_ip_input(ip_str: str) -> str:
+    """
+    自动格式化IP地址输入
+
+    参数:
+        ip_str: 输入的IP地址字符串
+
+    返回:
+        格式化后的IP地址字符串
+    """
+    parts = []
+    current = ""
+
+    # 提取数字部分
+    for char in ip_str:
+        if char.isdigit():
+            current += char
+        elif char == "." and current:
+            parts.append(current)
+            current = ""
+    if current:
+        parts.append(current)
+
+    # 限制最多4部分，每部分最多3位
+    parts = parts[:4]
+    formatted = []
+    for part in parts:
+        if part:
+            formatted.append(part[:3])
+        else:
+            formatted.append("0")
+
+    # 补全为4部分
+    while len(formatted) < 4:
+        formatted.append("0")
+
+    # 组合为标准IP格式
+    return ".".join(formatted[:4])
+
+
 def is_valid_port(port: str) -> bool:
     """
     验证端口号格式是否有效

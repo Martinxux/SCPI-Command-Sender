@@ -34,96 +34,20 @@ from PySide6.QtWidgets import (
 from scpi_app.logger import logger
 from scpi_app.core.ezsetting import DCAConfigurator
 from scpi_app.core.scpi import SCPIError, SCPIInstrument
+from scpi_app.core.worker import SCPIWorker
+from scpi_app.exceptions import ConnectionError, ConnectionTimeoutError, ConnectionRefusedError
+from scpi_app.utils.string_utils import validate_ip_input, format_ip_input
 from .dialogs import ConnectionDialog
 from .styles import STYLES, execution_state_STYLES
+from .connectfunction import ConnectionFunctions
 
 VERSION = "v2.1.0.20250918"
 
 
-class SCPIWorker(QThread):
-    """用于在后台执行SCPI命令的工作线程"""
-
-    command_sent = Signal(str, str, int)  # 信号：命令发送、响应和循环次数
-    progress_updated = Signal(int, int)  # 信号：当前进度和总命令数
-    finished = Signal()  # 信号：任务完成
-    error_occurred = Signal(str)  # 信号：错误发生
-
-    def __init__(self, instrument, commands, repeat, interval):
-        super().__init__()
-        self.instrument = instrument
-        self.commands = commands
-        self.repeat = repeat
-        self.interval = interval
-        self._is_running = True
-
-    def stop(self):
-        """请求停止执行"""
-        self._is_running = False
-        # 请求线程终止
-        self.quit()
-        # 等待线程安全退出（最多等待2秒）
-        self.wait(2000)
-
-    def run(self):
-        """
-        线程执行的主方法
-
-        注意: 此方法运行在独立线程中，所有GUI操作必须通过信号槽完成
-        """
-        try:
-            if not self._is_running:
-                return
-
-            total_commands = len(self.commands) * self.repeat
-            commands_executed = 0
-
-            for loop in range(self.repeat):
-                loop_num = loop + 1  # 循环次数从1开始计数
-                for cmd in self.commands:
-                    if not self._is_running:
-                        return  # 直接返回，不发送finished信号
-
-                    try:
-                        # 为*OPC?命令设置更长的超时时间
-                        timeout = 30.0 if cmd.strip() == "*OPC?" else 5.0
-                        response = self.instrument.send_command(cmd, timeout)
-                        if cmd.endswith("?"):
-                            self.command_sent.emit(
-                                cmd,
-                                str(response) if response else "No response",
-                                loop_num,
-                            )
-                        else:
-                            self.command_sent.emit(cmd, "", loop_num)
-                        commands_executed += 1
-                        self.progress_updated.emit(commands_executed, total_commands)
-
-                        # 等待间隔(最后一次循环的最后一个命令后不等待)
-                        if not (loop == self.repeat - 1 and cmd == self.commands[-1]):
-                            # 分段等待，以便能够响应停止请求
-                            wait_time = self.interval
-                            while wait_time > 0 and self._is_running:
-                                # 每次等待0.1秒，以便快速响应停止请求
-                                sleep_time = min(0.1, wait_time)
-                                time.sleep(sleep_time)
-                                wait_time -= sleep_time
-
-                    except SCPIError as e:
-                        self.error_occurred.emit(str(e))
-                        return
-
-            # 只有在正常完成所有命令时才发送finished信号
-            # 再次检查_is_running状态，确保用户没有在最后时刻停止执行
-            if self._is_running:
-                self.finished.emit()
-            else:
-                # 如果用户停止了执行，不发送finished信号
-                return
-        except Exception as e:
-            self.error_occurred.emit(f"意外错误: {str(e)}")
 
 
-class SCPIGUI(QMainWindow):
+
+class SCPIGUI(ConnectionFunctions, QMainWindow):
     """SCPI命令发送器的主GUI窗口"""
 
     def __init__(self):
@@ -668,42 +592,9 @@ class SCPIGUI(QMainWindow):
             self.command_list.clear()
             self.preset_combo.setCurrentIndex(0)  # 重置预设选择
 
-    def is_connected(self):
-        """检查是否真正连接到上位机"""
-        if not self.instrument:
-            return False
-        # 使用instrument自身的is_connected方法来检查连接状态，该方法会同时处理TCP/IP和VISA连接
-        return self.instrument.is_connected()
-
-    def is_valid_ip(self, ip_str):
-        """验证IP地址格式是否为xxx.xxx.xxx.xxx"""
-        parts = ip_str.split(".")
-        if len(parts) != 4:
-            return False
-        for part in parts:
-            if not part.isdigit():
-                return False
-            num = int(part)
-            if num < 0 or num > 255:
-                return False
-        return True
-
     def validate_ip_input(self, text):
         """实时验证IP地址输入"""
-        # 允许中间输入过程的不完整格式
-        if not text or text.count(".") > 3:
-            self.host_input.setStyleSheet(
-                "background-color: #FFD6D6; padding: 2px; margin-left: 0px;"
-            )
-            return
-
-        parts = text.split(".")
-        valid = True
-        for part in parts:
-            if not part.isdigit() or (part and int(part) > 255):
-                valid = False
-                break
-
+        valid = validate_ip_input(text)
         if valid:
             self.host_input.setStyleSheet("padding: 2px; margin-left: 0px;")
         else:
@@ -714,54 +605,8 @@ class SCPIGUI(QMainWindow):
     def format_ip_input(self):
         """自动格式化IP地址输入"""
         text = self.host_input.text()
-        parts = []
-        current = ""
-
-        # 提取数字部分
-        for char in text:
-            if char.isdigit():
-                current += char
-            elif char == "." and current:
-                parts.append(current)
-                current = ""
-        if current:
-            parts.append(current)
-
-        # 限制最多4部分，每部分最多3位
-        parts = parts[:4]
-        formatted = []
-        for part in parts:
-            if part:
-                formatted.append(part[:3])
-            else:
-                formatted.append("0")
-
-        # 补全为4部分
-        while len(formatted) < 4:
-            formatted.append("0")
-
-        # 组合为标准IP格式
-        self.host_input.setText(".".join(formatted[:4]))
-
-    def set_connection_ui(self, connected):
-        """设置连接状态UI"""
-        if connected:
-            self._update_connection_status("🟢 已连接", "#e8f5e9", "#2e7d32", True)
-        else:
-            self._update_connection_status("🔴 未连接", "#ffebee", "#c62828", False)
-
-    def _update_connection_status(self, text, bg_color, text_color, enable_execute):
-        """统一更新连接状态UI"""
-        self.connection_status.setText(text)
-        self.connection_status.setStyleSheet(
-            f"""
-            QLabel {{
-                background-color: {bg_color};
-                color: {text_color};
-            }}
-        """
-        )
-        self.execute_btn.setEnabled(enable_execute)
+        formatted_ip = format_ip_input(text)
+        self.host_input.setText(formatted_ip)
 
     def execute_commands(self):
         """执行命令序列"""
@@ -1052,7 +897,7 @@ class SCPIGUI(QMainWindow):
             )
             if "idn" in locals() and idn:
                 self.append_output(f"仪器标识: {idn}")
-        except SCPIError as e:
+        except (SCPIError, ConnectionError) as e:
             self.append_output(f"连接失败: {str(e)}", "ERROR")
             QMessageBox.critical(self, "连接错误", str(e))
             if self.instrument:
@@ -1062,49 +907,3 @@ class SCPIGUI(QMainWindow):
                     pass
                 self.instrument = None
             self.set_connection_ui(False)
-            self.instrument_info.setText("连接失败")
-
-    def toggle_connection(self):
-        """切换连接状态"""
-        if self.is_connected():
-            self.disconnect_instrument()
-        else:
-            self.show_connection_dialog()
-
-    def disconnect_instrument(self):
-        """断开仪器连接"""
-        if not self.is_connected():
-            QMessageBox.information(self, "信息", "当前未连接到仪器")
-            return
-
-        try:
-            self.instrument.disconnect()
-            self.set_connection_ui(False)
-            self.update_connection_menu(False)
-            self.instrument_info.setText("未连接")
-            self.append_output("已断开仪器连接")
-            self.execution_status.setText("🟡 空闲")
-            self.instrument = None
-        except Exception as e:
-            QMessageBox.critical(self, "错误", f"断开连接错误: {str(e)}")
-
-    def update_connection_menu(self, connected):
-        """更新连接菜单状态"""
-        # 清除菜单项
-        self.connection_menu.clear()
-
-        if connected:
-            # 已连接状态：显示断开连接选项
-            self.connect_action = self.connection_menu.addAction("断开连接")
-            self.connect_action.triggered.connect(self.toggle_connection)
-        else:
-            # 未连接状态：显示连接配置选项
-            self.connect_action = self.connection_menu.addAction("连接配置")
-            self.connect_action.triggered.connect(self.toggle_connection)
-
-
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = SCPIGUI()
-    window.show()
-    sys.exit(app.exec())
