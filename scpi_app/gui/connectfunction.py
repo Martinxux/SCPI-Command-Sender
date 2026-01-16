@@ -45,6 +45,7 @@ class ConnectionFunctions:
         try:
             self.instrument.disconnect()
             self.set_connection_ui(False)
+            self.instrument_info.setText("未连接")
             self.update_connection_menu(False)
             self.append_output("已断开与仪器的连接")
             self.instrument = None

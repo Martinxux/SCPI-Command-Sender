@@ -122,7 +122,7 @@ class ConnectionDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("连接配置")
         self.setModal(True)
-        self.setMinimumSize(500, 300)
+        self.setMinimumSize(500, 400)
 
         # 设备扫描器
         self.scanner = None

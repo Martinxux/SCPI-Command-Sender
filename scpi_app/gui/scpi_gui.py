@@ -71,7 +71,7 @@ class SCPIGUI(ConnectionFunctions, QMainWindow):
 
         self.init_ui()
         self.setWindowTitle("SCPI Command Sender")
-        self.setGeometry(430, 30, 810, 700)  # 减小高度，因为移除了连接区域
+        self.setGeometry(430, 30, 810, 900)  
         self.load_default_presets()
 
         # 自动加载配置文件
