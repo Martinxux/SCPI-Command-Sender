@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QSpinBox,
     QPushButton,
-    QComboBox,
+    QRadioButton,
     QGroupBox,
     QProgressBar,
     QMessageBox,
@@ -41,51 +41,78 @@ class DeviceScanner(QThread):
     device_found = Signal(str, str)  # 设备地址, 设备描述
     scan_finished = Signal()
 
-    def __init__(self, protocol="VISA"):
+    def __init__(self, protocol="VISA", vid=None, pid=None):
         super().__init__()
         self.protocol = protocol
+        self.vid = vid
+        self.pid = pid
         self._is_running = True
+        logger.info(f"DeviceScanner初始化，协议: {protocol}, VID: {vid}, PID: {pid}")
 
     def stop(self):
         """停止扫描"""
         self._is_running = False
+        logger.info("扫描线程已停止")
 
     def run(self):
         """扫描设备"""
+        logger.info(f"开始扫描设备，协议: {self.protocol}")
         try:
-            if self.protocol == "VISA" and is_pyvisa_available():
+            if not is_pyvisa_available():
+                logger.error("PyVISA不可用，无法扫描设备")
+                return
+                
+            # 不区分大小写的协议判断
+            protocol_upper = self.protocol.upper()
+            if protocol_upper == "VISA":
+                logger.info("开始执行VISA设备扫描")
                 self.scan_visa_devices()
-            elif self.protocol == "TCP/IP":
+            elif protocol_upper == "TCP/IP":
                 # 这里可以添加TCP/IP设备扫描逻辑
+                logger.info("TCP/IP扫描功能尚未实现")
                 pass
         except Exception as e:
-            logger.error(f"设备扫描错误: {str(e)}")
+            logger.error(f"设备扫描错误: {str(e)}", exc_info=True)
         finally:
+            logger.info("设备扫描完成")
             self.scan_finished.emit()
 
     def scan_visa_devices(self):
         """扫描VISA设备"""
         try:
             import pyvisa
+            logger.info("成功导入PyVISA模块")
 
             rm = pyvisa.ResourceManager()
-            devices = rm.list_resources()
+            logger.info("成功创建VISA资源管理器")
+            
+            # 使用更广泛的查询字符串来获取所有类型的VISA资源
+            devices = rm.list_resources('?*')  # 获取所有资源，而不仅限于INSTR类型
+            logger.info(f"找到 {len(devices)} 个VISA设备")
 
             for device in devices:
                 if not self._is_running:
                     break
+                
+                logger.info(f"处理设备: {device}")
                 try:
                     # 尝试连接设备获取信息
                     instr = rm.open_resource(device)
                     instr.timeout = 1000  # 设置超时时间
                     idn = instr.query("*IDN?")
+                    logger.info(f"设备 {device} 识别成功: {idn.strip()}")
                     self.device_found.emit(device, idn.strip())
                     instr.close()
                 except Exception as e:
                     # 如果无法获取设备信息，只显示设备地址
+                    logger.info(f"设备 {device} 无法识别: {str(e)}")
                     self.device_found.emit(device, f"无法识别设备 ({str(e)})")
         except Exception as e:
-            logger.error(f"VISA设备扫描失败: {str(e)}")
+            logger.error(f"VISA设备扫描失败: {str(e)}", exc_info=True)
+
+
+            
+
 
 
 class ConnectionDialog(QDialog):
@@ -95,7 +122,7 @@ class ConnectionDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("连接配置")
         self.setModal(True)
-        self.setFixedSize(500, 400)
+        self.setMinimumSize(500, 400)
 
         # 设备扫描器
         self.scanner = None
@@ -123,25 +150,23 @@ class ConnectionDialog(QDialog):
 
         # 协议选择
         protocol_group = QGroupBox("连接协议")
-        protocol_layout = QVBoxLayout()
+        protocol_layout = QHBoxLayout()
 
-        protocol_selector_layout = QHBoxLayout()
-        protocol_selector_layout.addWidget(QLabel("选择协议:"))
-        self.protocol_combo = QComboBox()
-        self.protocol_combo.addItem("TCP/IP", "TCP/IP")
-        if is_pyvisa_available():
-            self.protocol_combo.addItem("PyVISA", "VISA")
-        else:
-            self.protocol_combo.addItem("PyVISA (未安装)", "VISA")
-            self.protocol_combo.model().item(
-                self.protocol_combo.count() - 1
-            ).setEnabled(False)
+        self.tcpip_radio = QRadioButton("TCP/IP")
+        self.tcpip_radio.setChecked(True)
+        self.visa_radio = QRadioButton("PyVISA")
+        
+        # 如果PyVISA不可用，禁用VISA相关选项
+        if not is_pyvisa_available():
+            self.visa_radio.setEnabled(False)
+            self.visa_radio.setToolTip("PyVISA未安装")
 
-        self.protocol_combo.currentIndexChanged.connect(self.on_protocol_changed)
-        protocol_selector_layout.addWidget(self.protocol_combo)
-        protocol_selector_layout.addStretch()
-        protocol_layout.addLayout(protocol_selector_layout)
+        self.tcpip_radio.toggled.connect(self.on_protocol_changed)
+        self.visa_radio.toggled.connect(self.on_protocol_changed)
 
+        protocol_layout.addWidget(self.tcpip_radio)
+        protocol_layout.addWidget(self.visa_radio)
+        protocol_layout.addStretch()
         protocol_group.setLayout(protocol_layout)
         layout.addWidget(protocol_group)
 
@@ -178,41 +203,31 @@ class ConnectionDialog(QDialog):
         self.visa_group = QGroupBox("PyVISA 配置")
         visa_layout = QVBoxLayout()
 
-        # 设备扫描区域
-        scan_layout = QHBoxLayout()
-        self.scan_btn = QPushButton("扫描设备")
-        self.scan_btn.clicked.connect(self.scan_devices)
-        scan_layout.addWidget(self.scan_btn)
-
-        self.stop_scan_btn = QPushButton("停止扫描")
-        self.stop_scan_btn.clicked.connect(self.stop_scan)
-        self.stop_scan_btn.setEnabled(False)
-        scan_layout.addWidget(self.stop_scan_btn)
-        scan_layout.addStretch()
-        visa_layout.addLayout(scan_layout)
-
-        # 设备列表
-        visa_layout.addWidget(QLabel("检测到的设备:"))
-        self.device_list = QListWidget()
-        self.device_list.setMinimumHeight(120)
-        self.device_list.itemDoubleClicked.connect(self.on_device_selected)
-        visa_layout.addWidget(self.device_list)
-
-        # 手动输入设备地址
+        # 手动输入设备地址（设置默认值）
         manual_layout = QHBoxLayout()
-        manual_layout.addWidget(QLabel("手动输入设备地址:"))
+        manual_layout.addWidget(QLabel("设备地址:"))
         self.visa_address_input = QLineEdit()
-        self.visa_address_input.setPlaceholderText("例如: TCPIP::192.168.1.100::INSTR")
+        self.visa_address_input.setText("TCPIP::192.168.170.2::INSTR")  # 设置默认值
         manual_layout.addWidget(self.visa_address_input)
         visa_layout.addLayout(manual_layout)
 
+        # VISA设备扫描
+        scan_layout = QHBoxLayout()
+        self.visa_scan_btn = QPushButton("扫描VISA设备")
+        self.visa_scan_btn.clicked.connect(self.scan_visa_devices)
+        scan_layout.addWidget(self.visa_scan_btn)
+        scan_layout.addStretch()
+        visa_layout.addLayout(scan_layout)
+
+        # VISA设备列表
+        visa_layout.addWidget(QLabel("检测到的VISA设备:"))
+        self.visa_device_list = QListWidget()
+        self.visa_device_list.setMinimumHeight(100)
+        self.visa_device_list.itemDoubleClicked.connect(self.on_visa_device_selected)
+        visa_layout.addWidget(self.visa_device_list)
+
         self.visa_group.setLayout(visa_layout)
         layout.addWidget(self.visa_group)
-
-        # 进度条
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setVisible(False)
-        layout.addWidget(self.progress_bar)
 
         # 按钮区域
         button_layout = QHBoxLayout()
@@ -227,58 +242,57 @@ class ConnectionDialog(QDialog):
         self.setLayout(layout)
 
         # 初始状态
-        self.on_protocol_changed(0)
+        self.on_protocol_changed()
 
-    def on_protocol_changed(self, index):
+    def on_protocol_changed(self):
         """协议选择改变事件"""
-        protocol = self.protocol_combo.currentData()
-
-        if protocol == "TCP/IP":
+        if self.tcpip_radio.isChecked():
             self.tcpip_group.setVisible(True)
             self.visa_group.setVisible(False)
-        elif protocol == "VISA":
+        elif self.visa_radio.isChecked():
             self.tcpip_group.setVisible(False)
             self.visa_group.setVisible(True)
 
-    def scan_devices(self):
-        """开始扫描设备"""
+
+
+    def scan_visa_devices(self):
+        """开始扫描VISA设备"""
         if not is_pyvisa_available():
-            QMessageBox.warning(self, "警告", "PyVISA未安装，无法扫描设备")
+            QMessageBox.warning(self, "警告", "PyVISA未安装，无法扫描VISA设备")
+            logger.error("PyVISA未安装，无法扫描VISA设备")
             return
 
-        self.device_list.clear()
-        self.scan_btn.setEnabled(False)
-        self.stop_scan_btn.setEnabled(True)
-        self.progress_bar.setVisible(True)
-        self.progress_bar.setRange(0, 0)  # 无限进度条
+        self.visa_device_list.clear()
+        self.visa_scan_btn.setEnabled(False)
+        self.visa_scan_btn.setText("扫描中...")
 
         # 启动扫描线程
         self.scanner = DeviceScanner("VISA")
-        self.scanner.device_found.connect(self.on_device_found)
-        self.scanner.scan_finished.connect(self.on_scan_finished)
+        self.scanner.device_found.connect(self.on_visa_device_found)
+        self.scanner.scan_finished.connect(self.on_visa_scan_finished)
         self.scanner.start()
+        logger.info("开始扫描VISA设备")
 
-    def stop_scan(self):
-        """停止扫描"""
-        if self.scanner and self.scanner.isRunning():
-            self.scanner.stop()
-            self.scanner.wait(2000)  # 等待2秒
-
-    def on_device_found(self, address, description):
-        """设备发现事件"""
+    def on_visa_device_found(self, address, description):
+        """VISA设备发现事件"""
         item = QListWidgetItem(f"{address} - {description}")
         item.setData(Qt.UserRole, address)  # 存储设备地址
-        self.device_list.addItem(item)
+        self.visa_device_list.addItem(item)
 
-    def on_scan_finished(self):
-        """扫描完成事件"""
-        self.scan_btn.setEnabled(True)
-        self.stop_scan_btn.setEnabled(False)
-        self.progress_bar.setVisible(False)
+    def on_visa_scan_finished(self):
+        """VISA扫描完成事件"""
+        self.visa_scan_btn.setEnabled(True)
+        self.visa_scan_btn.setText("扫描VISA设备")
+        logger.info("VISA设备扫描完成")
+        
+        if self.visa_device_list.count() == 0:
+            QMessageBox.information(self, "提示", "未找到VISA设备")
+            logger.info("未找到VISA设备")
+            
         self.scanner = None
 
-    def on_device_selected(self, item):
-        """设备选择事件"""
+    def on_visa_device_selected(self, item):
+        """VISA设备选择事件"""
         address = item.data(Qt.UserRole)
         self.visa_address_input.setText(address)
 
@@ -299,7 +313,7 @@ class ConnectionDialog(QDialog):
             self.host_input.setStyleSheet("")
         else:
             self.host_input.setStyleSheet("background-color: #FFD6D6;")
-
+            
     def format_ip_input(self):
         """自动格式化IP地址输入"""
         text = self.host_input.text()
@@ -334,7 +348,12 @@ class ConnectionDialog(QDialog):
 
     def get_connection_info(self):
         """获取连接信息"""
-        protocol = self.protocol_combo.currentData()
+        if self.tcpip_radio.isChecked():
+            protocol = "TCP/IP"
+        elif self.visa_radio.isChecked():
+            protocol = "VISA"
+        else:
+            protocol = "TCP/IP"  # 默认值
 
         if protocol == "TCP/IP":
             return {
@@ -344,19 +363,13 @@ class ConnectionDialog(QDialog):
             }
         elif protocol == "VISA":
             address = self.visa_address_input.text().strip()
-            if not address:
-                # 如果手动输入为空，使用选中的设备
-                selected_items = self.device_list.selectedItems()
-                if selected_items:
-                    address = selected_items[0].data(Qt.UserRole)
-
             return {"protocol": "VISA", "address": address}
 
         return None
 
     def closeEvent(self, event):
         """关闭事件"""
-        self.stop_scan()
+        # self.stop_scan()  # 移除扫描功能后不再需要
         super().closeEvent(event)
 
 

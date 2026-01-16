@@ -92,6 +92,7 @@ class SCPIInstrument:
         self.host = host  # 仪器设备的IP地址
         self.port = port  # 仪器设备的端口号
         self.visa_address = visa_address  # 仪器设备的VISA地址
+        
         self.sock: Optional[socket.socket] = None  # TCP连接套接字，初始为None表示未连接
         self.visa_instr = None  # VISA仪器实例，初始为None表示未连接
         self.timeout: float = 10.0  # 连接超时时间，单位为秒
@@ -176,9 +177,6 @@ class SCPIInstrument:
             self.connection_type = 'visa'
             logger.info(f"成功通过VISA连接到仪器: {self.visa_address}")
             return True
-        except ImportError:
-            logger.error("VISA连接失败: pyvisa模块未安装")
-            raise SCPIError("VISA连接失败: pyvisa模块未安装")
         except pyvisa.VisaIOError as e:
             logger.error(f"VISA连接错误: {str(e)}")
             raise SCPIError(f"VISA连接错误: {str(e)}")
@@ -197,7 +195,7 @@ class SCPIInstrument:
             # 断开TCP/IP连接
             try:
                 self.sock.close()
-                logger.info(f"成功断开与仪器的TCP/IP连接: {self.host}:{self.port}")
+                logger.info(f"成功断开与仪器的TCP/IP连接")
             except Exception as e:
                 logger.error(f"断开TCP/IP连接时出错: {str(e)}")
             finally:
@@ -207,7 +205,7 @@ class SCPIInstrument:
             # 断开VISA连接
             try:
                 self.visa_instr.close()
-                logger.info(f"成功断开与仪器的VISA连接: {self.visa_address}")
+                logger.info(f"成功断开与仪器的VISA连接")
             except Exception as e:
                 logger.error(f"断开VISA连接时出错: {str(e)}")
             finally:
