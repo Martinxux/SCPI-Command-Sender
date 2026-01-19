@@ -633,15 +633,19 @@ class SCPIGUI(ConnectionFunctions, QMainWindow):
         self.set_execution_state("executing")
         self.append_output(f"开始执行 {len(commands)} 条命令，重复 {repeat} 次...")
 
-        # 如果存在之前的worker，先断开所有信号连接
+        # 如果存在之前的worker，先停止并清理
         if self.worker:
             try:
-                self.worker.command_sent.disconnect()
-                self.worker.progress_updated.disconnect()
-                self.worker.finished.disconnect()
-                self.worker.error_occurred.disconnect()
+                # 先断开信号连接，避免重复调用槽函数
+                self.worker.command_sent.disconnect(self.handle_command_result)
+                self.worker.progress_updated.disconnect(self.update_progress)
+                self.worker.finished.disconnect(self.handle_execution_finished)
+                self.worker.error_occurred.disconnect(self.handle_execution_error)
+                # 停止worker
+                self.worker.stop()
             except Exception:
-                pass  # 忽略断开连接时的错误
+                pass  # 忽略错误
+            self.worker = None
 
         # 创建工作线程
         self.worker = SCPIWorker(self.instrument, commands, repeat, interval)
@@ -697,11 +701,22 @@ class SCPIGUI(ConnectionFunctions, QMainWindow):
 
     def handle_execution_finished(self):
         """处理执行完成"""
+        # 检查worker是否已经被处理过，避免重复调用
+        if self.worker is None:
+            return
+            
         self.append_output("命令执行完成")
         self.execute_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         self.set_execution_state("completed")
         self.progress_bar.setValue(100)
+        
+        # 断开信号连接
+        try:
+            self.worker.finished.disconnect(self.handle_execution_finished)
+        except Exception:
+            pass
+            
         self.worker = None
 
     def handle_execution_error(self, error_msg):

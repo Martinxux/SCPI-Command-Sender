@@ -266,7 +266,7 @@ STYLES = {
         }
 
         QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
-            image: url(scpi_app/gui/icons/arrow_up.svg);
+            image: url(icons/arrow_up.svg);
             width: 8px;
             height: 8px;
         }
@@ -283,7 +283,7 @@ STYLES = {
         }
 
         QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
-            image: url(scpi_app/gui/icons/arrow_down.svg);
+            image: url(icons/arrow_down.svg);
             width: 8px;
             height: 8px;
         }
@@ -317,7 +317,7 @@ STYLES = {
         }
 
         QComboBox::down-arrow {
-            image: url(scpi_app/gui/icons/arrow_down.svg);
+            image: url(icons/arrow_down.svg);
             width: 8px;
             height: 8px;
         }
