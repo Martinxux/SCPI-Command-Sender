@@ -592,21 +592,6 @@ class SCPIGUI(ConnectionFunctions, QMainWindow):
             self.command_list.clear()
             self.preset_combo.setCurrentIndex(0)  # 重置预设选择
 
-    def validate_ip_input(self, text):
-        """实时验证IP地址输入"""
-        valid = validate_ip_input(text)
-        if valid:
-            self.host_input.setStyleSheet("padding: 2px; margin-left: 0px;")
-        else:
-            self.host_input.setStyleSheet(
-                "background-color: #FFD6D6; padding: 2px; margin-left: 0px;"
-            )
-
-    def format_ip_input(self):
-        """自动格式化IP地址输入"""
-        text = self.host_input.text()
-        formatted_ip = format_ip_input(text)
-        self.host_input.setText(formatted_ip)
 
     def execute_commands(self):
         """执行命令序列"""

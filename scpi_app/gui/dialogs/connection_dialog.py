@@ -19,20 +19,11 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QListWidget,
     QListWidgetItem,
+    QSizePolicy,
 )
 
 from scpi_app.logger import logger
 from ..styles import STYLES
-
-
-def is_pyvisa_available():
-    """检查PyVISA是否可用"""
-    try:
-        import pyvisa  # noqa: F401
-
-        return True
-    except ImportError:
-        return False
 
 
 class DeviceScanner(QThread):
@@ -49,27 +40,16 @@ class DeviceScanner(QThread):
         self._is_running = True
         logger.info(f"DeviceScanner初始化，协议: {protocol}, VID: {vid}, PID: {pid}")
 
-    def stop(self):
-        """停止扫描"""
-        self._is_running = False
-        logger.info("扫描线程已停止")
-
     def run(self):
-        """扫描设备"""
-        logger.info(f"开始扫描设备，协议: {self.protocol}")
+        """执行设备扫描"""
         try:
-            if not is_pyvisa_available():
-                logger.error("PyVISA不可用，无法扫描设备")
-                return
-                
             # 不区分大小写的协议判断
             protocol_upper = self.protocol.upper()
             if protocol_upper == "VISA":
                 logger.info("开始执行VISA设备扫描")
                 self.scan_visa_devices()
-            elif protocol_upper == "TCP/IP":
-                # 这里可以添加TCP/IP设备扫描逻辑
-                logger.info("TCP/IP扫描功能尚未实现")
+            else:
+                logger.warning(f"未知协议类型: {self.protocol}")
                 pass
         except Exception as e:
             logger.error(f"设备扫描错误: {str(e)}", exc_info=True)
@@ -111,10 +91,6 @@ class DeviceScanner(QThread):
             logger.error(f"VISA设备扫描失败: {str(e)}", exc_info=True)
 
 
-            
-
-
-
 class ConnectionDialog(QDialog):
     """连接配置对话框"""
 
@@ -122,7 +98,9 @@ class ConnectionDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("连接配置")
         self.setModal(True)
-        self.setMinimumSize(500, 400)
+        self.setMinimumSize(400, 300)  # 设置最小大小
+        self.setSizeGripEnabled(True)  # 启用大小调整手柄
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)  # 设置大小策略为可扩展
 
         # 设备扫描器
         self.scanner = None
@@ -147,6 +125,8 @@ class ConnectionDialog(QDialog):
     def init_ui(self):
         """初始化用户界面"""
         layout = QVBoxLayout()
+        layout.setContentsMargins(10, 10, 10, 10)  # 设置内边距
+        layout.setSpacing(10)  # 设置控件间距
 
         # 协议选择
         protocol_group = QGroupBox("连接协议")
@@ -155,11 +135,6 @@ class ConnectionDialog(QDialog):
         self.tcpip_radio = QRadioButton("TCP/IP")
         self.tcpip_radio.setChecked(True)
         self.visa_radio = QRadioButton("PyVISA")
-        
-        # 如果PyVISA不可用，禁用VISA相关选项
-        if not is_pyvisa_available():
-            self.visa_radio.setEnabled(False)
-            self.visa_radio.setToolTip("PyVISA未安装")
 
         self.tcpip_radio.toggled.connect(self.on_protocol_changed)
         self.visa_radio.toggled.connect(self.on_protocol_changed)
@@ -173,12 +148,15 @@ class ConnectionDialog(QDialog):
         # TCP/IP 配置区域
         self.tcpip_group = QGroupBox("TCP/IP 配置")
         tcpip_layout = QVBoxLayout()
+        tcpip_layout.setSpacing(8)
 
         # 主机IP设置
         ip_layout = QHBoxLayout()
         ip_layout.addWidget(QLabel("主机 IP:"))
         self.host_input = QLineEdit("127.0.0.1")
-        self.host_input.setFixedWidth(120)
+        # 移除固定宽度，使用大小策略
+        self.host_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.host_input.setMinimumWidth(120)
         self.host_input.textChanged.connect(self.validate_ip_input)
         self.host_input.editingFinished.connect(self.format_ip_input)
         ip_layout.addWidget(self.host_input)
@@ -191,7 +169,9 @@ class ConnectionDialog(QDialog):
         self.port_input = QSpinBox()
         self.port_input.setRange(1, 65535)
         self.port_input.setValue(8805)
-        self.port_input.setFixedWidth(80)
+        # 移除固定宽度，使用大小策略
+        self.port_input.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+        self.port_input.setMinimumWidth(80)
         port_layout.addWidget(self.port_input)
         port_layout.addStretch()
         tcpip_layout.addLayout(port_layout)
@@ -202,12 +182,14 @@ class ConnectionDialog(QDialog):
         # VISA 配置区域
         self.visa_group = QGroupBox("PyVISA 配置")
         visa_layout = QVBoxLayout()
+        visa_layout.setSpacing(8)
 
         # 手动输入设备地址（设置默认值）
         manual_layout = QHBoxLayout()
         manual_layout.addWidget(QLabel("设备地址:"))
         self.visa_address_input = QLineEdit()
         self.visa_address_input.setText("TCPIP::192.168.170.2::INSTR")  # 设置默认值
+        self.visa_address_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         manual_layout.addWidget(self.visa_address_input)
         visa_layout.addLayout(manual_layout)
 
@@ -223,6 +205,7 @@ class ConnectionDialog(QDialog):
         visa_layout.addWidget(QLabel("检测到的VISA设备:"))
         self.visa_device_list = QListWidget()
         self.visa_device_list.setMinimumHeight(100)
+        self.visa_device_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.visa_device_list.itemDoubleClicked.connect(self.on_visa_device_selected)
         visa_layout.addWidget(self.visa_device_list)
 
@@ -235,6 +218,7 @@ class ConnectionDialog(QDialog):
         self.connect_btn.clicked.connect(self.accept)
         self.cancel_btn = QPushButton("取消")
         self.cancel_btn.clicked.connect(self.reject)
+        button_layout.addStretch()
         button_layout.addWidget(self.connect_btn)
         button_layout.addWidget(self.cancel_btn)
         layout.addLayout(button_layout)
@@ -252,16 +236,17 @@ class ConnectionDialog(QDialog):
         elif self.visa_radio.isChecked():
             self.tcpip_group.setVisible(False)
             self.visa_group.setVisible(True)
-
-
+        
+        # 调整对话框大小以适应当前内容
+        self.adjustSize()
+        # 确保对话框不小于最小大小
+        current_size = self.size()
+        min_size = self.minimumSize()
+        if current_size.width() < min_size.width() or current_size.height() < min_size.height():
+            self.resize(max(current_size.width(), min_size.width()), 
+                       max(current_size.height(), min_size.height()))
 
     def scan_visa_devices(self):
-        """开始扫描VISA设备"""
-        if not is_pyvisa_available():
-            QMessageBox.warning(self, "警告", "PyVISA未安装，无法扫描VISA设备")
-            logger.error("PyVISA未安装，无法扫描VISA设备")
-            return
-
         self.visa_device_list.clear()
         self.visa_scan_btn.setEnabled(False)
         self.visa_scan_btn.setText("扫描中...")
@@ -369,17 +354,4 @@ class ConnectionDialog(QDialog):
 
     def closeEvent(self, event):
         """关闭事件"""
-        # self.stop_scan()  # 移除扫描功能后不再需要
         super().closeEvent(event)
-
-
-if __name__ == "__main__":
-    # 测试代码
-    from PySide6.QtWidgets import QApplication
-
-    app = QApplication(sys.argv)
-    dialog = ConnectionDialog()
-    if dialog.exec() == QDialog.Accepted:
-        info = dialog.get_connection_info()
-        print("连接信息:", info)
-    sys.exit()
